@@ -1,0 +1,126 @@
+# ===================================================================
+# Git Attributes — Laravel Project
+# ===================================================================
+
+# ------------------------------------------------------------------
+# 1) Default: ทุกไฟล์ text ใช้ LF (ป้องกัน CRLF บน Windows)
+# ------------------------------------------------------------------
+* text=auto eol=lf
+
+# ------------------------------------------------------------------
+# 2) บังคับ text อย่างชัดเจน (ไฟล์ที่ git อาจตรวจผิดเป็น binary)
+# ------------------------------------------------------------------
+*.php       text diff=php linguist-language=PHP
+*.blade.php text diff=html
+*.js        text diff=javascript
+*.ts        text diff=javascript
+*.jsx       text diff=javascript
+*.tsx       text diff=javascript
+*.vue       text diff=html
+*.css       text diff=css
+*.scss      text diff=css
+*.less      text diff=css
+*.html      text diff=html
+*.xml       text
+*.json      text
+*.yaml      text
+*.yml       text
+*.md        text diff=markdown
+*.txt       text
+*.sql       text
+*.env       text
+*.env.*     text
+*.sh        text eol=lf
+*.bash      text eol=lf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# Config / CI
+*.ini          text
+*.editorconfig text
+*.gitattributes text
+*.gitignore    text
+Dockerfile     text
+docker-compose*.yml text
+
+# ------------------------------------------------------------------
+# 3) Binary files — ห้าม git แก้ line ending / diff
+# ------------------------------------------------------------------
+# รูปภาพ
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.svg   text
+*.webp  binary
+*.avif  binary
+*.bmp   binary
+
+# Fonts
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.otf   binary
+
+# Documents / Archives
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.rar   binary
+*.7z    binary
+
+# Compiled / DB
+*.sqlite  binary
+*.sqlite3 binary
+
+# ------------------------------------------------------------------
+# 4) Lock files — ใช้ merge strategy "ours" หรือ binary
+#    ป้องกัน merge conflict ที่แก้ด้วยมือไม่ได้
+# ------------------------------------------------------------------
+composer.lock     text -diff merge=ours
+package-lock.json text -diff merge=ours
+yarn.lock         text -diff merge=ours
+pnpm-lock.yaml    text -diff merge=ours
+
+# ------------------------------------------------------------------
+# 5) Export-ignore — ไม่รวมใน `git archive` (production deploy)
+#    ลดขนาด package, ไม่เอาไฟล์ dev ขึ้น production
+# ------------------------------------------------------------------
+/.github            export-ignore
+/.vscode            export-ignore
+/.idea              export-ignore
+/tests              export-ignore
+/node_modules       export-ignore
+/storage            export-ignore
+
+*.md                export-ignore
+CHANGELOG.md        export-ignore
+LICENSE             export-ignore
+
+.editorconfig       export-ignore
+.env.example        export-ignore
+.gitattributes      export-ignore
+.gitignore          export-ignore
+.styleci.yml        export-ignore
+.php-cs-fixer.php   export-ignore
+phpunit.xml         export-ignore
+phpunit.xml.dist    export-ignore
+phpstan.neon        export-ignore
+phpstan.neon.dist   export-ignore
+pint.json           export-ignore
+vite.config.js      export-ignore
+vite.config.ts      export-ignore
+postcss.config.js   export-ignore
+tailwind.config.js  export-ignore
+
+# ------------------------------------------------------------------
+# 6) Linguist — GitHub language stats ที่ถูกต้อง
+# ------------------------------------------------------------------
+/public/build/**    linguist-generated
+/bootstrap/cache/** linguist-generated
+*.min.js            linguist-generated
+*.min.css           linguist-generated
+resources/js/vendor/** linguist-vendored

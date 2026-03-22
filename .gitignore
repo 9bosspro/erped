@@ -1,30 +1,86 @@
-/vendor/
-node_modules/
+# =============================================
+#  Laravel Application — .gitignore
+#  Best Practice: Security > Efficiency > Flexibility
+# =============================================
+
+# ===== Dependencies =====
+/vendor
+/node_modules
+/engine/modules/*/vendor
+/engine/modules/*/node_modules
+
+# ===== Environment & Secrets (CRITICAL) =====
+.env
+.env.*
+!.env.example
+/auth.json
+.rnd
+
+# ===== Security — Keys & Certificates =====
+/storage/*.key
+/storage/app/keys/passport/*.key
+/engine/modules/*/storage/*.key
+*.pem
+*.p12
+
+# ===== Laravel Framework Cache =====
+/bootstrap/cache/*.php
+/bootstrap/cache/*.tmp
+/storage/pail
+
+# ===== Database =====
+database/*.sqlite
+database/*.sqlite*
+
+# ===== Build & Compiled Assets =====
+/public/build
+/public/hot
+/public/assets
+/public/www
+/public/storage
+/public/themes/backend
+/public/themes/frontend
+/public/themes/core
+
+# ===== Testing =====
+/.phpunit.cache
+.phpunit.result.cache
+
+# ===== IDE / Editor =====
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+.phpactor.json
+
+# ===== OS Files =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Temp / Unsafe =====
+*.log
+*.tmp
+*.bak
+*.swp
+*.exe
+*.dll
+*.phar
+
+# ===== Debug Logs =====
 npm-debug.log
 yarn-error.log
 
-# Laravel 4 specific
-bootstrap/compiled.php
-app/storage/
-
-# Laravel 5 & Lumen specific
-public/storage
-public/hot
-
-# Laravel 5 & Lumen specific with changed public path
-public_html/storage
-public_html/hot
-
-storage/*.key
-.env
-Homestead.yaml
+# ===== Homestead / Vagrant =====
 Homestead.json
-/.vagrant
-.phpunit.result.cache
+Homestead.yaml
 
-/public/build
-/storage/pail
-.env.backup
-.env.production
-.phpactor.json
-auth.json
+# ===== FreeFileSync =====
+*.ffs_lock
+*.ffs_tmp
+sync.ffs_db
+
+# ===== AI/Dev Tools =====
+/.claude
+.continue/

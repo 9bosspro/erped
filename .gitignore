@@ -1,86 +1,96 @@
 # =============================================
-#  Laravel Application — .gitignore
-#  Best Practice: Security > Efficiency > Flexibility
+#  Laravel 12 + Inertia/React + Engine Modules
+#  .gitignore — Professional Best Practices
 # =============================================
 
-# ===== Dependencies =====
-/vendor
-/node_modules
-/engine/modules/*/vendor
-/engine/modules/*/node_modules
+# ───── Dependencies ─────
+/vendor/
+/node_modules/
+/engine/modules/*/vendor/
+/engine/modules/*/node_modules/
 
-# ===== Environment & Secrets (CRITICAL) =====
+# ───── Environment & Secrets (CRITICAL) ─────
 .env
 .env.*
 !.env.example
 /auth.json
-.rnd
 
-# ===== Security — Keys & Certificates =====
-/storage/*.key
-/storage/app/keys/passport/*.key
-/engine/modules/*/storage/*.key
+# ───── Security — Keys & Certificates ─────
+*.key
 *.pem
 *.p12
+*.pfx
+*.crt
+*.csr
+!package-lock.json.key
+/storage/app/keys/
 
-# ===== Laravel Framework Cache =====
+# ───── Laravel Framework Cache ─────
 /bootstrap/cache/*.php
-/bootstrap/cache/*.tmp
-/storage/pail
+/storage/pail/
 
-# ===== Database =====
-database/*.sqlite
-database/*.sqlite*
+# ───── Database ─────
+/database/*.sqlite*
 
-# ===== Build & Compiled Assets =====
-/public/build
+# ───── Build & Compiled Assets ─────
+/public/build/
 /public/hot
-/public/assets
-/public/www
 /public/storage
-/public/themes/backend
-/public/themes/frontend
-/public/themes/core
+/public/assets/
+/public/www/
+/public/themes/
 
-# ===== Testing =====
-/.phpunit.cache
+# ───── SSR ─────
+/bootstrap/ssr/
+/storage/framework/views/*.php
+
+# ───── Testing ─────
+/.phpunit.cache/
 .phpunit.result.cache
+/coverage/
 
-# ===== IDE / Editor =====
-/.fleet
-/.idea
-/.nova
-/.vscode
-/.zed
+# ───── IDE / Editor ─────
+/.fleet/
+/.idea/
+/.nova/
+/.vscode/
+/.zed/
+/.cursor/
+/.claude/
+.continue/
 .phpactor.json
+_ide_helper*.php
+.phpstorm.meta.php
 
-# ===== OS Files =====
+# ───── OS Files ─────
 .DS_Store
 Thumbs.db
 desktop.ini
+ehthumbs.db
 
-# ===== Temp / Unsafe =====
+# ───── Temp / Unsafe ─────
 *.log
 *.tmp
 *.bak
 *.swp
-*.exe
-*.dll
-*.phar
+*.swo
+*~
+*.cache
 
-# ===== Debug Logs =====
-npm-debug.log
-yarn-error.log
+# ───── Docker / Sail ─────
+/docker-compose.override.yml
 
-# ===== Homestead / Vagrant =====
+# ───── Homestead / Vagrant ─────
 Homestead.json
 Homestead.yaml
 
-# ===== FreeFileSync =====
+# ───── FreeFileSync ─────
 *.ffs_lock
 *.ffs_tmp
 sync.ffs_db
 
-# ===== AI/Dev Tools =====
-/.claude
-.continue/
+# ───── Binaries (safety net) ─────
+*.exe
+*.dll
+*.so
+*.dylib

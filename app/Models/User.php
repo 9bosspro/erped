@@ -20,6 +20,7 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
+        'backend_user_id',
         'name',
         'email',
         'password',

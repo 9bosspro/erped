@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+
 use App\Http\Middleware\LogRequests;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;

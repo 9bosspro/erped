@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    /*
+    |--------------------------------------------------------------------------
+    | Backend API Configuration
+    |--------------------------------------------------------------------------
+    |
+    | การตั้งค่าสำหรับเชื่อมต่อกับ Backend API (pppportal)
+    | ที่อยู่คนละเครื่อง/คนละ network
+    |
+    */
+
+    // URL ของ Backend API (pppportal)
+    'api_url' => env('BACKEND_API_URL', 'http://localhost:8880'),
+
+    // Timeout สำหรับ HTTP request (วินาที)
+    'timeout' => (int) env('BACKEND_TIMEOUT', 30),
+
+    // จำนวนครั้งที่จะ retry เมื่อเกิด server error (5xx)
+    'retry_times' => (int) env('BACKEND_RETRY_TIMES', 2),
+
+    // ระยะเวลารอระหว่าง retry (milliseconds)
+    'retry_delay' => (int) env('BACKEND_RETRY_DELAY', 500),
+];

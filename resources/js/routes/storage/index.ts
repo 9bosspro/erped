@@ -1,4 +1,5 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../wayfinder'
+import localA91488 from './local'
 /**
  * @see [serialized-closure]:2
  * @route '/storage/{path}'
@@ -90,7 +91,7 @@ local.head = (args: { path: string | number } | [path: string | number ] | strin
     
     local.form = localForm
 const storage = {
-    local: Object.assign(local, local),
+    local: Object.assign(local, localA91488),
 }
 
 export default storage

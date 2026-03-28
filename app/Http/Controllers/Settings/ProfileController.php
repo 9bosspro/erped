@@ -13,12 +13,22 @@ use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * คลาสควบคุมการจัดการโปรไฟล์ส่วนตัวของผู้ใช้งาน (Profile Controller)
+ * มีหน้าที่รับ Request ชำระลอจิกเบื้องต้นและมอบหมายลอจิกธุรกิจให้ Service จัดการตามหลักการ SOLID
+ */
 class ProfileController extends Controller
 {
     public function __construct(
-        private ProfileService $profileService,
+        private readonly ProfileService $profileService,
     ) {}
 
+    /**
+     * แสดงหน้าการตั้งค่าโปรไฟล์ผู้ใช้
+     *
+     * @param Request $request
+     * @return Response ส่งการเรนเดอร์กลับไปยัง UI ฝั่ง Frontend (Inertia.js)
+     */
     public function edit(Request $request): Response
     {
         return Inertia::render('settings/profile', [
@@ -27,8 +37,15 @@ class ProfileController extends Controller
         ]);
     }
 
+    /**
+     * รับคำร้องขอและอัปเดตข้อมูลรายละเอียดโปรไฟล์
+     *
+     * @param ProfileUpdateRequest $request ฟอร์มรีเควสต์และ Data validation
+     * @return RedirectResponse ส่งหน้ากลับไปยังโปรไฟล์หลังบันทึก
+     */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
+        // ทำการเรียก Service สำหรับอัปเดตข้อมูล และส่ง Data Transfer Object (DTO) ไปใช้งาน
         $this->profileService->updateProfile(
             $request->user(),
             ProfileUpdateData::fromRequest($request),
@@ -37,18 +54,28 @@ class ProfileController extends Controller
         return to_route('profile.edit');
     }
 
+    /**
+     * ดำเนินการลบบัญชีผู้ใช้ถาวร (Delete Account)
+     *
+     * @param Request $request
+     * @return RedirectResponse รีไดเร็กต์ไปหน้าแรก
+     */
     public function destroy(Request $request): RedirectResponse
     {
+        // ตรวจสอบความถูกต้องของรหัสผ่านปัจจุบันเพื่อยืนยันสิทธิ์ก่อนจัดการบัญชีเพื่อป้องกันช่องโหว่ (Security)
         $request->validate([
             'password' => ['required', 'current_password'],
         ]);
 
         $user = $request->user();
 
+        // ให้ออกจากระบบก่อนทำการลบ เพื่อปิดกั้นการเข้าใช้งานที่อาจค้างอยู่ในระบบรวดเร็ว (Session Security)
         Auth::logout();
 
+        // ส่งให้ ProfileService ลบตาม Repository
         $this->profileService->deleteAccount($user);
 
+        // ทำลายเซสชัน ป้องกันการย้อนตึงข้ามมาใหม่ (Session Fixation Cleanup)
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

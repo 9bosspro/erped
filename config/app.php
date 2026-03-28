@@ -65,7 +65,8 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // 'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'Asia/Bangkok'),  // add ampol
 
     /*
     |--------------------------------------------------------------------------
@@ -95,7 +96,8 @@ return [
     |
     */
 
-    'cipher' => 'AES-256-CBC',
+    // 'cipher' => 'AES-256-CBC',
+    'cipher' => 'AES-256-GCM',
 
     'key' => env('APP_KEY'),
 

@@ -7,50 +7,76 @@ use App\Events\AccountDeleted;
 use App\Events\ProfileUpdated;
 use App\Models\User;
 use App\Repositories\Contracts\UserRepositoryInterface;
+use Illuminate\Support\Facades\DB;
 
+/**
+ * คลาสจัดการลอจิกต่างๆ ที่เกี่ยวข้องกับโปรไฟล์ผู้ใช้งาน (Profile Service)
+ * ออกแบบตามหลักการ SOLID (Single Responsibility Principle)
+ */
 class ProfileService
 {
     public function __construct(
-        private UserRepositoryInterface $userRepository,
+        private readonly UserRepositoryInterface $userRepository,
     ) {}
 
+    /**
+     * อัปเดตข้อมูลโปรไฟล์ผู้ใช้งาน และจัดการกรณีการเปลี่ยนอีเมลด้วย Database Transactions
+     *
+     * @param User $user ออบเจ็กต์ผู้ใช้งาน
+     * @param ProfileUpdateData $data วัตถุเก็บข้อมูลที่ได้รับจากการกรอกฟอร์ม (DTO)
+     * @return User คืนค่าออบเจ็กต์ผู้ใช้หลังอัปเดตผ่าน Repository
+     */
     public function updateProfile(User $user, ProfileUpdateData $data): User
     {
-        $changedFields = [];
+        return DB::transaction(function () use ($user, $data) {
+            // ตรวจสอบฟิลด์ที่มีการเปลี่ยนแปลงโดยใช้ array_filter แทน if รัวๆ
+            $changedFields = array_filter(
+                ['name', 'email'],
+                fn (string $field) => $user->$field !== $data->$field
+            );
 
-        if ($user->name !== $data->name) {
-            $changedFields[] = 'name';
-        }
+            // คืนค่ากลับทันทีและไม่ต้องทำอะไร หากไม่มีการปรับเปลี่ยนใดๆ
+            if (empty($changedFields)) {
+                return $user;
+            }
 
-        $emailChanged = $user->email !== $data->email;
-        if ($emailChanged) {
-            $changedFields[] = 'email';
-        }
+            $emailChanged = in_array('email', $changedFields, true);
 
-        $user = $this->userRepository->update($user, [
-            'name' => $data->name,
-            'email' => $data->email,
-        ]);
+            // ส่งข้อมูลไปยัง Repository เพื่ออัปเดต
+            $user = $this->userRepository->update($user, [
+                'name' => $data->name,
+                'email' => $data->email,
+            ]);
 
-        if ($emailChanged) {
-            $user->email_verified_at = null;
-            $user->save();
-        }
+            // หากมีการเปลี่ยนอีเมล ให้ทำการตั้งสถานะอีเมลเป็น Unverified
+            if ($emailChanged) {
+                $user = $this->userRepository->markEmailAsUnverified($user);
+            }
 
-        if (! empty($changedFields)) {
-            ProfileUpdated::dispatch($user, $changedFields);
-        }
+            // กระจาย Event แจ้งการอัปเดตไปยังระบบอื่นๆ 
+            ProfileUpdated::dispatch($user, array_values($changedFields));
 
-        return $user;
+            return $user;
+        });
     }
 
+    /**
+     * ดำเนินการลบบัญชีผู้ใช้ออกจากระบบถาวร (Delete Account Data)
+     *
+     * @param User $user ออบเจ็กต์ผู้ใช้งาน
+     * @return void
+     */
     public function deleteAccount(User $user): void
     {
-        $userId = $user->id;
-        $email = $user->email;
+        DB::transaction(function () use ($user) {
+            $userId = $user->id;
+            $email = $user->email;
 
-        $this->userRepository->delete($user);
+            // มอบหน้าที่การลบให้ Repository จัดการ
+            $this->userRepository->delete($user);
 
-        AccountDeleted::dispatch($userId, $email);
+            // กระจาย Event แจ้งให้ระบบประมวลผลต่อ (Background Async Processing)
+            AccountDeleted::dispatch($userId, $email);
+        });
     }
 }

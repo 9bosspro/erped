@@ -1,0 +1,47 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+
+/*
+|--------------------------------------------------------------------------
+| Global Helper Functions (Laravel Standard Edition 2025)
+|--------------------------------------------------------------------------
+|
+| ชุดฟังก์ชันช่วยเหลือหลักที่ใช้บ่อยในโปรเจกต์ Laravel
+| ฟังก์ชันเฉพาะทางถูกแยกไปยังไฟล์ย่อย:
+|
+| - ArrayHelper.php    : Array utilities
+| - StringHelper.php   : String utilities
+| - PathHelper.php     : Path utilities
+| - SecurityHelper.php : Security/Encryption utilities
+| - JsonHelper.php     : JSON utilities
+| - ThaiHelper.php     : Thai-specific utilities
+| - DebugHelper.php    : Debug utilities
+|
+*/
+
+if (! function_exists('get_jwt_payload')) {
+    /**
+     * ดึง payload จาก JWT token
+     *
+     * @param  string|null  $jwt  JWT token string
+     * @return array|null payload array หรือ null ถ้า decode ไม่ได้
+     *
+     * @throws InvalidArgumentException ถ้า format ไม่ถูกต้อง (ไม่ใช่ 3 parts)
+     */
+    function get_jwt_payload(?string $jwt): ?array
+    {
+        if (empty($jwt)) {
+            return null;
+        }
+
+        // ใช้ JwtHelper หลัก (lcobucci/jwt)
+        $jwtService = app('core.crypto.jwt');
+        return $jwtService->getPayload($jwt);
+    }
+}

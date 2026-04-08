@@ -112,7 +112,7 @@ final class FileContentHandler
      */
     public function jsonEncodePrettify(mixed $data): string
     {
-        return json_encode(
+        return (string) json_encode(
             $data,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
@@ -130,7 +130,7 @@ final class FileContentHandler
             return null;
         }
 
-        return file_get_contents($path);
+        return file_get_contents($path) ?: null;
     }
 
     /**

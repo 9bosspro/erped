@@ -11,10 +11,12 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
+
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        //  $this->app->register(BaseServiceProvider::class);
         $this->app->bind(UserRepositoryInterface::class, UserRepository::class);
         $this->app->singleton(BackendApiClient::class);
     }
@@ -34,12 +36,15 @@ class AppServiceProvider extends ServiceProvider
             return;
         }
 
-        DB::listen(function (QueryExecuted $query) {
-            if ($query->time > 100) { // > 100ms
+        $threshold = config('backend.slow_query_threshold_ms', 100);
+
+        DB::listen(function (QueryExecuted $query) use ($threshold) {
+            if ($query->time > $threshold) {
                 Log::channel('daily')->warning('Slow query detected', [
-                    'sql' => $query->sql,
-                    'bindings' => $query->bindings,
-                    'time_ms' => $query->time,
+                    'sql'       => $query->sql,
+                    'bindings'  => $query->bindings,
+                    'time_ms'   => $query->time,
+                    'threshold' => $threshold,
                 ]);
             }
         });

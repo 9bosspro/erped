@@ -103,9 +103,9 @@ class UserRepository extends BaseRepository implements UserInterface
      * Eager load 'peopleable' เพื่อลด N+1 query เมื่อ caller ต้องการข้อมูลเพิ่ม
      *
      * @param  string  $citizenId  เลขประจำตัว
-     * @return Model|null People model พร้อม 'peopleable' relation หรือ null
+     * @return People|null People model พร้อม 'peopleable' relation หรือ null
      */
-    public function checkPeople(string $citizenId): ?Model
+    public function checkPeople(string $citizenId): ?People
     {
         return People::whereHasMorph(
             'peopleable',

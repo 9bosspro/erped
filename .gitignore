@@ -14,22 +14,28 @@
 .env.*
 !.env.example
 /auth.json
+.rnd
 
 # ───── Security — Keys & Certificates ─────
+/storage/*.key
+/storage/app/keys/passport/*.key
+/engine/modules/*/storage/*.key
 *.key
 *.pem
 *.p12
 *.pfx
 *.crt
 *.csr
-!package-lock.json.key
-/storage/app/keys/
+#!package-lock.json.key
+#/storage/app/keys/
 
 # ───── Laravel Framework Cache ─────
 /bootstrap/cache/*.php
+/bootstrap/cache/*.tmp
 /storage/pail/
 
 # ───── Database ─────
+/database/*.sqlite
 /database/*.sqlite*
 
 # ───── Build & Compiled Assets ─────
@@ -39,6 +45,10 @@
 /public/assets/
 /public/www/
 /public/themes/
+/public/themes/backend
+/public/themes/frontend
+/public/themes/core
+
 
 # ───── SSR ─────
 /bootstrap/ssr/
@@ -57,7 +67,7 @@
 /.zed/
 /.cursor/
 /.claude/
-.continue/
+.continue
 .phpactor.json
 _ide_helper*.php
 .phpstorm.meta.php
@@ -76,6 +86,8 @@ ehthumbs.db
 *.swo
 *~
 *.cache
+*.dll
+*.phar
 
 # ───── Docker / Sail ─────
 /docker-compose.override.yml
@@ -88,9 +100,18 @@ Homestead.yaml
 *.ffs_lock
 *.ffs_tmp
 sync.ffs_db
+# ===== AI/Dev Tools =====
+/.claude/
+.continue/
+/.gemini/
 
 # ───── Binaries (safety net) ─────
 *.exe
 *.dll
 *.so
 *.dylib
+# ===== Project Cleanup (ไม่ commit) =====
+cleanup.ps1
+error*.txt
+tests_output.txt
+refactor_*.php

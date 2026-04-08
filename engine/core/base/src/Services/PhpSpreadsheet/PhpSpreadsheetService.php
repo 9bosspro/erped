@@ -7,10 +7,10 @@ namespace Core\Base\Services\PhpSpreadsheet;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Reader\Csv;
+use PhpOffice\PhpSpreadsheet\Reader\IReader;
 use PhpOffice\PhpSpreadsheet\Reader\Xls;
 use PhpOffice\PhpSpreadsheet\Reader\Xlsx;
 use RuntimeException;
-
 
 /**
  * PhpSpreadsheetService — อ่าน/นำเข้าไฟล์ spreadsheet (CSV, XLSX, XLS)
@@ -104,33 +104,43 @@ class PhpSpreadsheetService
     public function toAssociative(array $data, array $selectFields = []): Collection
     {
         if (empty($data)) {
-            return collect();
+            /** @var Collection<int, array<string, mixed>> $emptyCollection */
+            $emptyCollection = collect();
+
+            return $emptyCollection;
         }
 
-        if (is_asso($data)) {
-            return collect();
+        if (is_associative_array($data)) {
+            /** @var Collection<int, array<string, mixed>> $emptyCollection */
+            $emptyCollection = collect();
+
+            return $emptyCollection;
         }
 
-        $headers = $data[0];
+        $headers = (array) $data[0];
         unset($data[0]);
 
         if ($selectFields === []) {
-            $selectFields = $headers;
+            $selectFields = array_map(fn ($h) => (string) $h, $headers);
         }
 
-        $data = array_values($data);
+        $items = array_values($data);
 
-        return collect($data)->map(function (array $row) use ($headers, $selectFields): array {
+        /** @var Collection<int, array<string, mixed>> $result */
+        $result = collect($items)->map(function (array $row) use ($headers, $selectFields): array {
             $mapped = [];
 
             foreach ($headers as $index => $columnName) {
-                if (in_array($columnName, $selectFields, true) && isset($row[$index])) {
-                    $mapped[$columnName] = $row[$index];
+                $colStr = (string) $columnName;
+                if (in_array($colStr, $selectFields, true) && isset($row[$index])) {
+                    $mapped[$colStr] = $row[$index];
                 }
             }
 
             return $mapped;
         });
+
+        return $result;
     }
 
     /**
@@ -138,22 +148,27 @@ class PhpSpreadsheetService
      *
      * Row แรกจะเป็น headers (union ของ keys ทุก row)
      *
-     * @param  Collection  $collection  ข้อมูลจาก DB query
+     * @param  Collection<int, array<string, mixed>>  $collection  ข้อมูลจาก DB query
      * @return Collection<int, array<int, mixed>>
      */
     public function fromCollection(Collection $collection): Collection
     {
         if ($collection->isEmpty()) {
-            return collect();
+            /** @var Collection<int, array<int, mixed>> $emptyCollection */
+            $emptyCollection = collect();
+
+            return $emptyCollection;
         }
 
         // สร้าง headers จาก union ของทุก keys
+        /** @var string[] $headers */
         $headers = $collection->reduce(
-            fn(array $carry, array $item) => gen_union_arrays($carry, array_keys($item)),
+            fn (array $carry, array $item) => gen_union_arrays($carry, array_keys($item)),
             [],
         );
 
         // แปลง associative → indexed ตามลำดับ headers
+        /** @var Collection<int, array<int, mixed>> $data */
         $data = $collection->map(function (array $item) use ($headers): array {
             $row = [];
             foreach ($headers as $columnName) {
@@ -175,7 +190,7 @@ class PhpSpreadsheetService
      * @param  string[]  $selectFields  columns ที่ต้องการ import (ว่าง = ทั้งหมด)
      * @param  string[]  $updateColumns  columns ที่ต้องการ update เมื่อ conflict
      * @param  string[]  $uniqueKeys  columns ที่เป็น unique key สำหรับ upsert
-     * @return array<int, array<int, array<string, mixed>>>  ข้อมูลที่ import สำเร็จ
+     * @return array<int, array<int, array<string, mixed>>> ข้อมูลที่ import สำเร็จ
      */
     public function importToDatabase(
         string $file,
@@ -195,8 +210,8 @@ class PhpSpreadsheetService
             return [];
         }
 
-        $headers = $data[0];
-        $dbColumns = $model->list_Columns();
+        $headers = (array) $data[0];
+        $dbColumns = (array) $model->list_Columns();
         $headers = gen_subset_arrays($headers, $dbColumns);
 
         if (empty($headers)) {
@@ -210,16 +225,17 @@ class PhpSpreadsheetService
             if (empty($headers[0])) {
                 return [];
             }
-            $uniqueKeys = [$headers[0]];
+            $uniqueKeys = [(string) $headers[0]];
         }
 
         // Resolve select fields
         if ($selectFields === []) {
-            $selectFields = $headers;
+            $selectFields = array_map(fn ($h) => (string) $h, $headers);
         }
         $selectFields = gen_subset_arrays($selectFields, $headers);
 
         // แปลงเป็น associative
+        /** @var Collection<int, array<string, mixed>> $collection */
         $collection = $this->toAssociative($data, $selectFields);
 
         if ($collection->isEmpty()) {
@@ -262,18 +278,19 @@ class PhpSpreadsheetService
     /**
      * สร้าง reader ตาม file extension
      */
-    private function createReader(string $extension): Csv|Xlsx|Xls
+    private function createReader(string $extension): IReader
     {
         return match ($extension) {
             'csv' => $this->createCsvReader(),
-            'xlsx' => (new Xlsx())->setReadDataOnly(true),
-            'xls' => (new Xls())->setReadDataOnly(true),
+            'xlsx' => (new Xlsx)->setReadDataOnly(true),
+            'xls' => (new Xls)->setReadDataOnly(true),
+            default => throw new RuntimeException("Unsupported file extension in reader factory: {$extension}"),
         };
     }
 
     private function createCsvReader(): Csv
     {
-        $reader = new Csv();
+        $reader = new Csv;
         $reader->setDelimiter(',');
         $reader->setEnclosure('');
         $reader->setSheetIndex(0);

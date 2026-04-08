@@ -195,10 +195,10 @@ class MinioHealthCheck
             $result['passed'] = true;
             $result['message'] = 'Connected successfully';
         } catch (AwsException $e) {
-            $result['message'] = 'AWS Error: ' . $e->getAwsErrorMessage();
+            $result['message'] = 'AWS Error: '.$e->getAwsErrorMessage();
             $result['error_code'] = $e->getAwsErrorCode();
         } catch (Exception $e) {
-            $result['message'] = 'Connection failed: ' . $e->getMessage();
+            $result['message'] = 'Connection failed: '.$e->getMessage();
         }
 
         $result['latency_ms'] = round((microtime(true) - $startTime) * 1000, 2);
@@ -247,10 +247,10 @@ class MinioHealthCheck
                 $result['exists'] = true;
                 $result['message'] = 'Bucket exists but access denied - check credentials';
             } else {
-                $result['message'] = 'Bucket check failed: ' . $e->getAwsErrorMessage();
+                $result['message'] = 'Bucket check failed: '.$e->getAwsErrorMessage();
             }
         } catch (Exception $e) {
-            $result['message'] = 'Error: ' . $e->getMessage();
+            $result['message'] = 'Error: '.$e->getMessage();
         }
 
         return $result;
@@ -273,7 +273,7 @@ class MinioHealthCheck
             'message' => '',
         ];
 
-        $testKey = '.health-check-' . uniqid();
+        $testKey = '.health-check-'.uniqid();
 
         try {
             Storage::disk($this->disk)->put($testKey, 'health-check-test');
@@ -289,7 +289,7 @@ class MinioHealthCheck
             $result['message'] = $result['passed'] ? 'All permissions OK' : 'Some permissions failed';
 
         } catch (Exception $e) {
-            $result['message'] = 'Permission test failed: ' . $e->getMessage();
+            $result['message'] = 'Permission test failed: '.$e->getMessage();
 
             try {
                 Storage::disk($this->disk)->delete($testKey);
@@ -404,7 +404,7 @@ class MinioHealthCheck
 
                     return ['success' => true, 'message' => 'Bucket created', 'created' => true];
                 } catch (Exception $createEx) {
-                    return ['success' => false, 'message' => 'Failed to create bucket: ' . $createEx->getMessage()];
+                    return ['success' => false, 'message' => 'Failed to create bucket: '.$createEx->getMessage()];
                 }
             }
 
@@ -470,6 +470,6 @@ class MinioHealthCheck
             $i++;
         }
 
-        return round($bytes, 2) . ' ' . $units[$i];
+        return round($bytes, 2).' '.$units[$i];
     }
 }

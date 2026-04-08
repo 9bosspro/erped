@@ -6,6 +6,8 @@ namespace Core\Base\Services\User;
 
 use App\Models\AnonymousPeople;
 use Core\Base\Contracts\User\RegistrationServiceInterface;
+use Core\Base\DTO\ServiceResult;
+use Core\Base\DTO\User\RegistrationDTO;
 use Core\Base\Repositories\Auth\RegisterTokenInterface;
 use Core\Base\Repositories\User\UserInterface;
 use Core\Base\Support\Helpers\Crypto\JwtHelper;
@@ -54,10 +56,8 @@ class RegistrationService implements RegistrationServiceInterface
      * 3. คืนค่า payload พร้อม email สำหรับขั้นตอนถัดไป
      *
      * @param  string|null  $token  JWT Bearer token (null → คืน 401 ทันที)
-     * @param  string  $key  Encryption key สำหรับ decode JWT
-     * @return array{status: bool, message: string, data: mixed, code: int}
      */
-    public function checkToken(?string $token, string $key): array
+    public function checkToken(?string $token): ServiceResult
     {
         if (empty($token)) {
             return $this->fail('คุณไม่มีสิทธิ์ดำเนินการลงทะเบียน ต้องไปขอโทเคนก่อนค่ะ', 401);
@@ -74,14 +74,14 @@ class RegistrationService implements RegistrationServiceInterface
         }
 
         $tokenCheck = $this->checkRegisterToken((string) $tokenDataId);
-        if (! $tokenCheck['status']) {
+        if (! $tokenCheck->success) {
             return $tokenCheck;
         }
 
         // แนบ email จาก RegisterToken และจำลอง payload ให้โค้ดเก่า
         $payload = (object) [
             'data' => $tokenDataId,
-            'email' => $tokenCheck['data']->email,
+            'email' => $tokenCheck->data->email,
         ];
 
         return $this->success('ตรวจสอบโทเคนสำเร็จ', $payload, 200);
@@ -93,9 +93,8 @@ class RegistrationService implements RegistrationServiceInterface
      * ตรวจสอบ: ไม่ revoked, ไม่หมดอายุ, email ยังไม่มีในระบบ
      *
      * @param  string  $registerTokenId  UUID ของ RegisterToken
-     * @return array{status: bool, message: string, data: mixed, code: int}
      */
-    public function checkRegisterToken(string $registerTokenId): array
+    public function checkRegisterToken(string $registerTokenId): ServiceResult
     {
         $token = $this->registerTokenRepository->findValidToken($registerTokenId);
 
@@ -132,13 +131,15 @@ class RegistrationService implements RegistrationServiceInterface
      * เพื่อให้ Controller บางเบาและทดสอบได้ง่ายขึ้น
      *
      * @param  string  $email  อีเมลที่ต้องการลงทะเบียน
-     * @return array{status: bool, message: string, data: mixed, code: int}
      */
-    public function requestRegisterToken(string $email): array
+    public function requestRegisterToken(string $email): ServiceResult
     {
-        $delay = (int) config('auth.registration.token_ttl', 86400);
-        $key = (string) config('auth.jwt.key', '');
+        $delay = (int) config('core.base::crypto.jwt.delay', 86400);
+        $key = (string) config('core.base::crypto.jwt.secret', '');
 
+        if (empty($key)) {
+            return $this->fail('ไม่มี key ในระบบ กรุณาขอโทเคนใหม่', 422);
+        }
         // ตรวจสอบ token ที่ยังไม่หมดอายุ — ป้องกันการขอซ้ำ
         $existing = $this->registerTokenRepository->findActiveByEmail($email);
 
@@ -176,14 +177,13 @@ class RegistrationService implements RegistrationServiceInterface
      *
      * ⚠️ password จะถูก hash ด้วย bcrypt ก่อนบันทึก — ห้าม expose ใน response
      *
-     * @param  array  $data  {name_th: string, name_en?: string, password: string}
+     * @param  RegistrationDTO  $data  ข้อมูลผู้สมัคร
      * @param  string  $registerTokenId  UUID ของ RegisterToken ที่ใช้ลงทะเบียน
      * @param  string  $email  อีเมลของผู้ลงทะเบียน (จาก RegisterToken)
-     * @return array{person: mixed, user: mixed, people: mixed, registerTokenId: string, email: string, citizen_id: string, username: string}
      *
      * @throws Throwable เมื่อ transaction ล้มเหลว (rollback อัตโนมัติ)
      */
-    public function executeRegistration(array $data, string $registerTokenId, string $email): array
+    public function executeRegistration(RegistrationDTO $data, string $registerTokenId, string $email): ServiceResult
     {
         return DB::transaction(function () use ($data, $registerTokenId, $email) {
             // 1. สุ่ม citizen_id ชั่วคราวสำหรับ AnonymousPeople
@@ -206,7 +206,7 @@ class RegistrationService implements RegistrationServiceInterface
                 ]);
             });
 
-            return [
+            return ServiceResult::success([
                 'person' => $person,
                 'user' => $user,
                 'people' => $people,
@@ -215,7 +215,7 @@ class RegistrationService implements RegistrationServiceInterface
                 'citizen_id' => $citizenId,
                 'username' => $citizenId,
                 // ❌ ห้าม return $data โดยตรง เพราะมี password อยู่
-            ];
+            ], 'Registration completed successfully');
         });
     }
 
@@ -233,12 +233,13 @@ class RegistrationService implements RegistrationServiceInterface
      *
      * @return array{0: mixed, 1: mixed, 2: mixed}
      */
-    private function resolvePersonAndUser(string $citizenId, array $data, string $email): array
+    private function resolvePersonAndUser(string $citizenId, RegistrationDTO $data, string $email): array
     {
-        $nameTh = $data['name_th'] ?? '';
-        $nameEn = $data['name_en'] ?? $nameTh; // fallback: ใช้ name_th ถ้าไม่มี name_en
-        $password = Hash::make($data['password']);
+        $nameTh = $data->name_th ?? '';
+        $nameEn = $data->name_en ?? $nameTh; // fallback: ใช้ name_th ถ้าไม่มี name_en
+        $password = Hash::make($data->password);
 
+        /** @var \App\Models\People|null $existingPeople */
         $existingPeople = $this->userRepository->checkPeople($citizenId);
 
         if ($existingPeople) {
@@ -256,11 +257,13 @@ class RegistrationService implements RegistrationServiceInterface
         }
 
         // กรณี: ไม่มี People record → สร้างใหม่ทั้งหมด
+        /** @var AnonymousPeople $person */
         $person = AnonymousPeople::firstOrCreate(
             ['citizen_id' => $citizenId],
             ['name_th' => $nameTh, 'name_en' => $nameEn, 'metadata' => []],
         );
 
+        /** @var \App\Models\People $people */
         $people = $person->people()->create(['metadata' => []]);
 
         $user = $people->user()->create([
@@ -275,29 +278,16 @@ class RegistrationService implements RegistrationServiceInterface
         return [$person, $people, $user];
     }
 
-    /**
-     * สร้าง array response สำเร็จในรูปแบบมาตรฐาน
-     *
-     * @param  string  $message  ข้อความแสดงผล
-     * @param  mixed  $data  ข้อมูลที่คืนกลับ
-     * @param  int  $code  HTTP status code
-     * @return array{status: true, message: string, data: mixed, code: int}
-     */
-    private function success(string $message, mixed $data, int $code): array
+    private function success(string $message, mixed $data, int $code): ServiceResult
     {
-        return ['status' => true, 'message' => $message, 'data' => $data, 'code' => $code];
+        return ServiceResult::success($data, $message, $code);
     }
 
     /**
-     * สร้าง array response ล้มเหลวในรูปแบบมาตรฐาน
-     *
-     * @param  string  $message  ข้อความแสดงสาเหตุของความล้มเหลว
-     * @param  int     $code     HTTP status code (4xx)
-     * @param  mixed   $data     ข้อมูลเพิ่มเติม เช่น remaining_time
-     * @return array{status: false, message: string, data: mixed, code: int}
+     * คืนค่า error ในรูปแบบ ServiceResult
      */
-    private function fail(string $message, int $code, mixed $data = []): array
+    private function fail(string $message, int $code, mixed $data = []): ServiceResult
     {
-        return ['status' => false, 'message' => $message, 'data' => $data, 'code' => $code];
+        return ServiceResult::error($message, $code, $data);
     }
 }

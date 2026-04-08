@@ -22,7 +22,7 @@ trait HasQueryOperations
      *
      * ใช้เมื่อ findWhere() ไม่เพียงพอ เช่น ต้องการ orWhere, join, subquery
      *
-     * @param  Closure(Builder): void  $queryCallback  callback ที่รับ Builder
+     * @param  Closure(Builder): (Builder|mixed|void)  $queryCallback  callback ที่รับ Builder
      * @param  array<string>  $relations  eager-load relations
      * @return Collection<int, Model>
      */
@@ -37,7 +37,7 @@ trait HasQueryOperations
     /**
      * ค้นหา record แรกจาก Closure query (คืน null ถ้าไม่พบ)
      *
-     * @param  Closure(Builder): void  $queryCallback  callback ที่รับ Builder
+     * @param  Closure(Builder): (Builder|mixed|void)  $queryCallback  callback ที่รับ Builder
      * @param  array<string>  $relations  eager-load relations
      */
     public function firstBy(Closure $queryCallback, array $relations = []): ?Model
@@ -72,7 +72,7 @@ trait HasQueryOperations
     /**
      * ตรวจสอบว่ามี record ที่ตรงเงื่อนไขหรือไม่
      *
-     * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม (optional)
+     * @param  Closure(Builder): (Builder|mixed|void)|null  $queryCallback  เงื่อนไขเพิ่มเติม (optional)
      */
     public function exists(?Closure $queryCallback = null): bool
     {
@@ -82,7 +82,7 @@ trait HasQueryOperations
     /**
      * นับจำนวน records ที่ตรงเงื่อนไข
      *
-     * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม (optional)
+     * @param  Closure(Builder): (Builder|mixed|void)|null  $queryCallback  เงื่อนไขเพิ่มเติม (optional)
      */
     public function count(?Closure $queryCallback = null): int
     {
@@ -93,7 +93,7 @@ trait HasQueryOperations
      * หาค่าสูงสุดของ column
      *
      * @param  string  $column  ชื่อ column
-     * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม
+     * @param  Closure(Builder): (Builder|mixed|void)|null  $queryCallback  เงื่อนไขเพิ่มเติม
      */
     public function max(string $column, ?Closure $queryCallback = null): mixed
     {
@@ -104,7 +104,7 @@ trait HasQueryOperations
      * หาค่าต่ำสุดของ column
      *
      * @param  string  $column  ชื่อ column
-     * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม
+     * @param  Closure(Builder): (Builder|mixed|void)|null  $queryCallback  เงื่อนไขเพิ่มเติม
      */
     public function min(string $column, ?Closure $queryCallback = null): mixed
     {
@@ -115,22 +115,24 @@ trait HasQueryOperations
      * หาผลรวมของ column
      *
      * @param  string  $column  ชื่อ column
-     * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม
+     * @param  Closure(Builder): (Builder|mixed|void)|null  $queryCallback  เงื่อนไขเพิ่มเติม
      */
     public function sum(string $column, ?Closure $queryCallback = null): float|int
     {
-        return $this->applyOptionalQuery($queryCallback)->sum($column);
+        return (float) $this->applyOptionalQuery($queryCallback)->sum($column);
     }
 
     /**
      * หาค่าเฉลี่ยของ column (คืน null ถ้าไม่มีข้อมูล)
      *
      * @param  string  $column  ชื่อ column
-     * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม
+     * @param  Closure(Builder): (Builder|mixed|void)|null  $queryCallback  เงื่อนไขเพิ่มเติม
      */
     public function avg(string $column, ?Closure $queryCallback = null): ?float
     {
-        return $this->applyOptionalQuery($queryCallback)->avg($column);
+        $result = $this->applyOptionalQuery($queryCallback)->avg($column);
+
+        return $result !== null ? (float) $result : null;
     }
 
     /**
@@ -152,7 +154,7 @@ trait HasQueryOperations
      * ใช้เมื่อต้องการค่าเดียวเช่น email, status, last_login_at
      *
      * @param  string  $column  ชื่อ column ที่ต้องการ
-     * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม
+     * @param  Closure(Builder): (Builder|mixed|void)|null  $queryCallback  เงื่อนไขเพิ่มเติม
      * @return mixed ค่าของ column หรือ null ถ้าไม่พบ record
      */
     public function value(string $column, ?Closure $queryCallback = null): mixed
@@ -194,7 +196,7 @@ trait HasQueryOperations
      * ใช้ลด boilerplate ที่ซ้ำกันใน aggregate methods ทุกตัว
      * (max, min, sum, avg, count, exists, pluck ล้วนใช้ pattern เดิม)
      *
-     * @param  Closure(Builder): void|null  $queryCallback  optional callback
+     * @param  Closure(Builder): (Builder|mixed|void)|null  $queryCallback  optional callback
      */
     private function applyOptionalQuery(?Closure $queryCallback): Builder
     {

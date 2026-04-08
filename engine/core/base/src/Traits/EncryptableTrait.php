@@ -1,52 +1,69 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Core\Base\Traits;
 
-// $RECYCLE.BIN
+use Illuminate\Contracts\Encryption\DecryptException;
 
+/**
+ * EncryptableTrait — เข้า/ถอดรหัส Model attributes อัตโนมัติ (Laravel Encrypter)
+ *
+ * การใช้งาน:
+ * ```php
+ * class UserSalary extends Model
+ * {
+ *     use EncryptableTrait;
+ *
+ *     protected array $encryptable = ['payroll', 'bank_account'];
+ * }
+ * ```
+ *
+ * หมายเหตุ: ใช้ Laravel's `encrypt()` / `decrypt()` ซึ่งอิง APP_KEY
+ * ถ้า APP_KEY เปลี่ยน ข้อมูลที่เข้ารหัสไว้จะถอดรหัสไม่ได้ — ต้อง re-encrypt ก่อน rotate key
+ */
 trait EncryptableTrait
 {
     /**
-     * If the attribute is in the encryptable array
-     * then decrypt it.
+     * ถอดรหัส attribute ถ้าอยู่ใน $encryptable list
      *
-     *
-     * @return $value
-     * namespace App\Models;
-
-            use Illuminate\Database\Eloquent\Model;
-            use App\Traits\Encryptable;
-            class UserSalary extends Model
-            {
-                use Encryptable;
-                protected $fillable = [
-                    'user_id',
-                    'payroll',
-                    'start_at',
-                    'end_at',
-                ];
-                protected $encryptable = [
-                    'payroll',
-                ];
-            }
+     * @param  string  $key  ชื่อ attribute
+     * @return mixed ค่าที่ถอดรหัสแล้ว หรือค่าเดิมถ้าถอดรหัสไม่ได้
      */
-    public function getAttribute($key)
+    public function getAttribute($key): mixed
     {
         $value = parent::getAttribute($key);
-        if (isset($this->encryptable) && in_array($key, $this->encryptable) && $value !== '') {
-            $value = decrypt($value);
+
+        if (
+            ! empty($this->encryptable)
+            && in_array($key, $this->encryptable, strict: true)
+            && $value !== null
+            && $value !== ''
+        ) {
+            try {
+                $value = decrypt($value);
+            } catch (DecryptException) {
+                // คืนค่าเดิมถ้า decrypt ล้มเหลว (เช่น ข้อมูลเก่าที่ยังไม่ได้เข้ารหัส)
+            }
         }
 
         return $value;
     }
 
     /**
-     * If the attribute is in the encryptable array
-     * then encrypt it.
+     * เข้ารหัส attribute ก่อนบันทึก ถ้าอยู่ใน $encryptable list
+     * ข้าม null — ไม่เข้ารหัสค่าที่เป็น null
+     *
+     * @param  string  $key  ชื่อ attribute
+     * @param  mixed  $value  ค่าที่ต้องการบันทึก
      */
-    public function setAttribute($key, $value)
+    public function setAttribute($key, $value): mixed
     {
-        if (isset($this->encryptable) && in_array($key, $this->encryptable)) {
+        if (
+            ! empty($this->encryptable)
+            && in_array($key, $this->encryptable, strict: true)
+            && $value !== null
+        ) {
             $value = encrypt($value);
         }
 
@@ -54,22 +71,28 @@ trait EncryptableTrait
     }
 
     /**
-     * When need to make sure that we iterate through
-     * all the keys.
+     * ถอดรหัส attributes ที่ถูกเข้ารหัสทั้งหมด เมื่อแปลง Model เป็น array
      *
-     * @return array
+     * @return array<string, mixed>
      */
-    public function attributesToArray()
+    public function attributesToArray(): array
     {
         $attributes = parent::attributesToArray();
-        if (isset($this->encryptable)) {
-            foreach ($this->encryptable as $key) {
-                if (isset($attributes[$key])) {
-                    $attributes[$key] = decrypt($attributes[$key]);
-                }
-            }
 
+        if (empty($this->encryptable)) {
             return $attributes;
         }
+
+        foreach ($this->encryptable as $key) {
+            if (isset($attributes[$key]) && $attributes[$key] !== '') {
+                try {
+                    $attributes[$key] = decrypt($attributes[$key]);
+                } catch (DecryptException) {
+                    // คงค่าเดิมไว้ถ้า decrypt ล้มเหลว
+                }
+            }
+        }
+
+        return $attributes;
     }
 }

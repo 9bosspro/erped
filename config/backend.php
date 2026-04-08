@@ -24,4 +24,7 @@ return [
 
     // ระยะเวลารอระหว่าง retry (milliseconds)
     'retry_delay' => (int) env('BACKEND_RETRY_DELAY', 500),
+
+    // Threshold สำหรับ slow query logging (milliseconds)
+    'slow_query_threshold_ms' => (int) env('SLOW_QUERY_THRESHOLD_MS', 100),
 ];

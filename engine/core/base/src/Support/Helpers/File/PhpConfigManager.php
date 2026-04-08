@@ -23,7 +23,7 @@ final class PhpConfigManager
      * แปลง human-readable size string เป็น bytes
      * เช่น '256M' → 268435456, '2G' → 2147483648
      *
-     * @param  string|float|int|null  $value  ค่าที่ต้องการแปลง
+     * @param  float|int|string|null  $value  ค่าที่ต้องการแปลง
      * @return int จำนวน bytes
      */
     public static function convertHrToBytes(string|float|int|null $value): int
@@ -45,7 +45,7 @@ final class PhpConfigManager
             default => 1,
         };
 
-        return min($bytes, PHP_INT_MAX);
+        return (int) min($bytes, PHP_INT_MAX);
     }
 
     /**
@@ -159,7 +159,7 @@ final class PhpConfigManager
      * แปลง bytes เป็น human-readable string
      * เช่น 268435456 → '256.00 MB'
      *
-     * @param  int|float  $bytes  ขนาดเป็น bytes
+     * @param  float|int  $bytes  ขนาดเป็น bytes
      * @param  int  $precision  จำนวนทศนิยม
      * @return string human-readable size
      */

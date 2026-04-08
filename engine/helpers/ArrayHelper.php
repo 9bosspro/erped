@@ -210,3 +210,43 @@ if (! function_exists('array_missing')) {
         return $missing;
     }
 }
+
+// ─── Backward Compatibility Aliases ──────────────────────────────
+
+if (! function_exists('is_asso')) {
+    /** @deprecated ใช้ is_associative_array() แทน */
+    function is_asso(mixed $array): bool
+    {
+        return is_associative_array($array);
+    }
+}
+
+if (! function_exists('gen_subset_arrays')) {
+    /**
+     * กรองอาร์เรย์แรกให้เหลือเฉพาะสมาชิกที่มีอยู่ในอาร์เรย์ที่สอง
+     */
+    function gen_subset_arrays(array $array1, array $array2): array
+    {
+        return array_values(array_intersect($array1, $array2));
+    }
+}
+
+if (! function_exists('gen_union_arrays')) {
+    /**
+     * คืนค่า Unique Union ของอาเรย์ที่ส่งเข้ามา
+     */
+    function gen_union_arrays(array $array1, array $array2): array
+    {
+        return array_values(array_unique(array_merge($array1, $array2)));
+    }
+}
+
+if (! function_exists('gen_diff_arrays')) {
+    /**
+     * คืนค่าที่ต่างกัน (เฉพาะใน array1)
+     */
+    function gen_diff_arrays(array $array1, array $array2): array
+    {
+        return array_values(array_diff($array1, $array2));
+    }
+}

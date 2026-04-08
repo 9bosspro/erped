@@ -18,6 +18,11 @@ use Illuminate\Http\UploadedFile;
  */
 interface StorageDriverInterface
 {
+    /**
+     * @param  string  $disk  ชื่อ disk ใน config/filesystems.php
+     */
+    public function __construct(string $disk);
+
     // =========================================================================
     // Driver Information
     // =========================================================================

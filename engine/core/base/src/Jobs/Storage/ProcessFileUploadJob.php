@@ -154,9 +154,9 @@ class ProcessFileUploadJob implements ShouldQueue
     {
         Log::error('ProcessFileUploadJob: permanently failed after all retries', [
             'storageFileId' => $this->storageFileId,
-            'disk'          => $this->diskName,
-            'path'          => $this->storagePath,
-            'error'         => $exception->getMessage(),
+            'disk' => $this->diskName,
+            'path' => $this->storagePath,
+            'error' => $exception->getMessage(),
         ]);
 
         try {
@@ -166,8 +166,8 @@ class ProcessFileUploadJob implements ShouldQueue
             if ($storageFile) {
                 $storageFile->metadata = array_merge($storageFile->metadata ?? [], [
                     'upload_status' => 'permanently_failed',
-                    'failed_at'     => now()->toISOString(true),
-                    'error'         => $exception->getMessage(),
+                    'failed_at' => now()->toISOString(true),
+                    'error' => $exception->getMessage(),
                 ]);
                 $storageFile->is_active = false;
                 $storageFile->save();
@@ -175,17 +175,17 @@ class ProcessFileUploadJob implements ShouldQueue
         } catch (Throwable $e) {
             Log::error('ProcessFileUploadJob: failed to update status on permanent failure', [
                 'storageFileId' => $this->storageFileId,
-                'error'         => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 
         event(new FileUploadFailed(
-            filename:  $this->storedName,
+            filename: $this->storedName,
             directory: $this->directory,
-            reason:    $exception->getMessage(),
+            reason: $exception->getMessage(),
             exception: $exception,
-            userId:    $this->userId,
-            driver:    $this->diskName,
+            userId: $this->userId,
+            driver: $this->diskName,
         ));
     }
 
@@ -197,25 +197,6 @@ class ProcessFileUploadJob implements ShouldQueue
     public function uniqueId(): string
     {
         return $this->storageFileId;
-    }
-
-    /**
-     * ช่วยจัดการการอัปเดต Metadata และสถานะ
-     */
-    private function updateStatus($storageFile, string $status, ?string $error = null): void
-    {
-        $metadata = $storageFile->metadata ?? [];
-        $metadata['upload_status'] = $status;
-        $metadata['updated_at'] = now()->toISOString();
-
-        if ($error) {
-            $metadata['error_message'] = $error;
-        }
-
-        $storageFile->update([
-            'metadata' => $metadata,
-            'is_active' => ($status === 'completed'),
-        ]);
     }
 
     private function cleanupTemp(): void

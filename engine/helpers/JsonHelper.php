@@ -10,87 +10,45 @@ declare(strict_types=1);
 | ฟังก์ชันช่วยเหลือสำหรับการจัดการ JSON
 |
 */
+if (! function_exists('return_success')) {
+    function return_success(string $message, mixed $data, int $code = 200): array
+    {
+        return Core\Base\DTO\ServiceResult::success($data, $message, $code)->toArray();
+    }
+}
+if (! function_exists('return_error')) {
+    function return_error(string $message, mixed $data = null, int $code = 400): array
+    {
+        return Core\Base\DTO\ServiceResult::error($message, $code, $data)->toArray();
+    }
+}
 if (! function_exists('presponsesuccess')) {
-    /**
-     * คืนค่าโครงสร้างข้อมูล ฺArray แบบ Response Success
-     *
-     * @param  string|null  $message  ข้อความแจ้งเตือน (เช่น "สำเร็จ")
-     * @param  mixed  $data  ข้อมูลที่ต้องการแนบกลับ
-     * @return array{success: true, message: string|null, data: mixed, timestamp: int}
-     */
     function presponsesuccess(?string $message, mixed $data = null): array
     {
-        return [
-            'success'   => true,
-            'message'   => $message,
-            'data'      => $data,
-            'timestamp' => time(),
-        ];
+        return Core\Base\DTO\ServiceResult::success($data, $message ?? 'Success')->toArray();
     }
 }
 
 if (! function_exists('presponseerror')) {
-    /**
-     * คืนค่าโครงสร้างข้อมูล ฺArray แบบ Response Error
-     *
-     * @param  string|null  $message  ข้อความแจ้งสาเหตุความผิดพลาด
-     * @param  mixed  $data  ข้อมูลชี้แจงเพิ่มเติม
-     * @return array{success: false, message: string|null, data: mixed, timestamp: int}
-     */
     function presponseerror(?string $message, mixed $data = null): array
     {
-        return [
-            'success'   => false,
-            'status'    => 'error',
-            'message'   => $message,
-            'data'      => $data,
-            'timestamp' => time(),
-
-        ];
-        /*
-         "meta": {
-    "timestamp": 1774398351,
-    "request_id": "req_67f3ab12",
-    "path": "/api/v1/login"
-  }
-        */
+        return Core\Base\DTO\ServiceResult::error($message ?? 'Error', 400, $data)->toArray();
     }
 }
 
 if (! function_exists('is_jsons')) {
     /**
-     * ตรวจสอบว่า string เป็น JSON ที่ถูกต้องตามมาตรฐานหรือไม่
-     * คล้าย json_validate() ตรวจสอบว่า string ที่ส่งมาเป็น JSON ที่ถูกต้องหรือไม่
-     * ป้องกัน error trim(null) ใน PHP 8.1+
-     *
-     * @param  string|null  $value  ข้อความที่ต้องการตรวจสอบ
-     * @param  bool  $allowEmpty  อนุญาตให้เป็น {}, [], null หรือ string ว่างได้
+     * ตรวจสอบว่า string ที่รับมาเป็น JSON string ที่ถูกต้องหรือไม่
      */
-    function is_jsons(?string $value, bool $allowEmpty = false): bool
+    function is_jsons(string $string): bool
     {
-        if ($value === null || $value === '') {
-            return $allowEmpty;
-        }
-
-        $value = trim($value);
-
-        // อนุญาต JSON ว่างพื้นฐานทันทีเพื่อความเร็ว
-        if ($allowEmpty && in_array($value, ['{}', '[]', 'null'], true)) {
-            return true;
-        }
-
-        // PHP 8.3+ มีฟังก์ชันในตัวที่เร็วและแม่นยำกว่า
-        if (function_exists('json_validate')) {
-            return json_validate($value);
-        }
-
-        // Fallback สำหรับ PHP < 8.3
-        try {
-            json_decode($value, false, 512, JSON_THROW_ON_ERROR);
-            return true;
-        } catch (JsonException) {
+        if ($string === '') {
             return false;
         }
+
+        json_decode($string);
+
+        return json_last_error() === JSON_ERROR_NONE;
     }
 }
 
@@ -122,8 +80,8 @@ if (! function_exists('response_jsons')) {
      * @deprecated ใช้ json_response() แทน — ฟังก์ชันนี้ bypass Laravel middleware pipeline
      *             และใช้ exit() ซึ่งไม่เหมาะกับ Laravel application
      *
-     * @param  mixed  $data    ข้อมูลที่จะเข้ารหัสเป็น JSON
-     * @param  int    $status  รหัสสถานะ HTTP
+     * @param  mixed  $data  ข้อมูลที่จะเข้ารหัสเป็น JSON
+     * @param  int  $status  รหัสสถานะ HTTP
      */
     function response_jsons(mixed $data, int $status = 200): never
     {
@@ -154,7 +112,7 @@ if (! function_exists('json_response')) {
      * @param  mixed  $data  ข้อมูลที่จะเข้ารหัสเป็น JSON
      * @param  int  $status  รหัสสถานะ HTTP
      */
-    function json_response(mixed $data, int $status = 200): \Illuminate\Http\JsonResponse
+    function json_response(mixed $data, int $status = 200): Illuminate\Http\JsonResponse
     {
         return response()->json(
             $data,

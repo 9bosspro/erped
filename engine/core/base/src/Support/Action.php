@@ -34,7 +34,7 @@ final class Action extends ActionHookEvent implements ActionInterface
      * - จัดการ once=true listeners อัตโนมัติหลังรัน
      * - เรียงลำดับตาม priority (น้อย → มาก)
      *
-     * @param  string  $hook        ชื่อ hook เช่น 'user.created', 'order.paid'
+     * @param  string  $hook  ชื่อ hook เช่น 'user.created', 'order.paid'
      * @param  array<mixed>  $args  arguments ที่ส่งให้แต่ละ callback
      * @param  string|null  $scope  จำกัด scope เช่น 'api', 'web' (null = ทั้งหมด)
      */

@@ -2,11 +2,6 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-
 /*
 |--------------------------------------------------------------------------
 | Global Helper Functions (Laravel Standard Edition 2025)

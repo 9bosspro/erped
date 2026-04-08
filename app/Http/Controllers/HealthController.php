@@ -5,14 +5,16 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 class HealthController extends Controller
 {
     public function index(): JsonResponse
     {
         $checks = [
-            'database' => $this->checkDatabase(),
-            'cache' => $this->checkCache(),
+            'database'    => $this->checkDatabase(),
+            'cache'       => $this->checkCache(),
+            'backend_api' => $this->checkBackendApi(),
         ];
 
         $healthy = ! in_array(false, array_column($checks, 'ok'), true);
@@ -44,6 +46,19 @@ class HealthController extends Controller
             return ['ok' => $value === true];
         } catch (\Throwable $e) {
             return ['ok' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    private function checkBackendApi(): array
+    {
+        try {
+            $response = Http::timeout(5)
+                ->acceptJson()
+                ->get(config('backend.api_url').'/api/health');
+
+            return ['ok' => $response->successful()];
+        } catch (\Throwable) {
+            return ['ok' => false, 'error' => 'Backend API unreachable'];
         }
     }
 }

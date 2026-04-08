@@ -6,6 +6,7 @@ namespace Core\Base\Services\Storage;
 
 use App\Models\StorageDisk;
 use App\Models\StorageFiles;
+use Core\Base\DTO\ServiceResult;
 use Core\Base\Exceptions\Storage\FileAlreadyDeletedException;
 use Core\Base\Exceptions\Storage\FileNotDeletedException;
 use Core\Base\Exceptions\Storage\FileNotFoundException;
@@ -17,6 +18,7 @@ use Engine\Modules\Files\Actions\UpdateUploadFileAction;
 use Engine\Modules\Files\Actions\UploadFileAction;
 use Engine\Modules\Files\DTOs\DeleteActionDTO;
 use Engine\Modules\Files\DTOs\DeleteForceActionDTO;
+use Engine\Modules\Files\DTOs\Disk\AddDiskData;
 use Engine\Modules\Files\DTOs\UpdateUploadActionDTO;
 use Engine\Modules\Files\DTOs\UploadAsyncActionDTO;
 use Engine\Modules\Files\DTOs\UploadAsyncDTO;
@@ -29,7 +31,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
-use Engine\Modules\Files\DTOs\Disk\AddDiskData;
 
 /**
  * FileStorageService — Service หลักสำหรับจัดการไฟล์ใน Storage
@@ -82,14 +83,14 @@ class FileStorageService
     public function listDisks(int $perPage = 15): LengthAwarePaginator
     {
         // ใช้งาน Caching Layer พร้อมป้องกัน Cache Stampede (Thundering herd) สำหรับ high-traffic endpoint
-        $page = request()->query('page', 1);
-        $perPage = request()->query('per_page', $perPage);
+        $page = (int) request()->query('page', '1');
+        $perPage = (int) request()->query('per_page', (string) $perPage);
         $cacheKey = "storage_disks_page_{$perPage}_{$page}";
 
         return $this->storageDiskDbRepository->remember(
             cacheKey: $cacheKey,
             ttl: 3600, // แคชไว้ 1 ชั่วโมง
-            callback: fn($repo) => $repo->paginate($perPage),
+            callback: fn ($repo) => $repo->paginate($perPage),
             preventStampede: true, // ป้องกัน stampede
         );
     }
@@ -108,7 +109,7 @@ class FileStorageService
         return $this->storageDiskDbRepository->remember(
             cacheKey: $cacheKey,
             ttl: 7200, // แคชไว้ 2 ชั่วโมง
-            callback: fn($repo) => $repo->find($id),
+            callback: fn ($repo) => $repo->find($id),
         );
     }
 
@@ -120,16 +121,18 @@ class FileStorageService
      */
     public function updateDisk(string $id, array $data): ?StorageDisk
     {
-        /** @var StorageDisk|null */
-        $disk = $this->storageDiskDbRepository->update($id, $data);
+        $updated = (bool) $this->storageDiskDbRepository->update($id, $data);
 
-        if ($disk) {
+        if ($updated) {
             // เคลียร์ Cache แบบ Tag (ทิ้ง Pagination) และแบบ Key เดี่ยว
             $this->storageDiskDbRepository->forgetCache();
             $this->storageDiskDbRepository->forgetByKey("storage_disk_{$id}");
+
+            /** @var StorageDisk|null */
+            return $this->storageDiskDbRepository->find($id);
         }
 
-        return $disk;
+        return null;
     }
 
     /**
@@ -160,19 +163,23 @@ class FileStorageService
      * แล้ว poll GET /files/{id}/status เพื่อตรวจสอบ
      *
      * @param  UploadAsyncDTO  $dto  DTO สำหรับ upload (file, disk, directory, userId)
-     * @return array{id: string, status: string, path: string, is_active: bool}
+     * @return ServiceResult ข้อมูลสถานะการอัปโหลด
      *
      * @throws RuntimeException ถ้า DTO ไม่มี disk
      */
-    public function uploadAsync(UploadAsyncDTO $dto): array
+    public function uploadAsync(UploadAsyncDTO $dto): ServiceResult
     {
-        $disk = $dto->disk ?? throw new RuntimeException('Missing required key: disk');
+        $disk = $dto->disk;
+
+        if ($disk === '') {
+            throw new RuntimeException('Disk name is required for upload');
+        }
 
         return $this->uploadFileAction->execute(new UploadAsyncActionDTO(
             objdriver: $this->driverResolverService->forDisk($disk),
             file: $dto->file,
-            directory: $dto->directory ?? '',
-            userId: $dto->userId ?? null,
+            directory: $dto->directory,
+            userId: $dto->userId,
         ));
     }
 
@@ -185,7 +192,7 @@ class FileStorageService
      * @param  string  $directory  directory ปลายทาง
      * @param  string  $disk  ชื่อ disk ('minio', 'local', 's3')
      * @param  string|null  $userId  UUID ของเจ้าของไฟล์
-     * @return array<int, array{id: string, status: string, path: string}>
+     * @return ServiceResult[]
      */
     public function uploadManyAsync(
         array $files,
@@ -217,11 +224,10 @@ class FileStorageService
      * @param  UploadedFile  $file  ไฟล์ใหม่
      * @param  string  $id  UUID ของไฟล์เดิม
      * @param  string|null  $userId  UUID ของผู้ดำเนินการ (null = system)
-     * @return array{id: string, status: string, path: string, old_path: string}
      *
      * @throws FileNotFoundException ถ้าไม่พบไฟล์เดิม
      */
-    public function updateUploadAsync(UploadedFile $file, string $id, ?string $userId = null): array
+    public function updateUploadAsync(UploadedFile $file, string $id, ?string $userId = null): ServiceResult
     {
         $existing = $this->storageFileDbRepository->findWithTrashed($id);
 
@@ -247,12 +253,10 @@ class FileStorageService
      *
      * @param  string  $id  UUID ของไฟล์
      * @param  string|null  $userId  UUID ของผู้ลบ
-     * @return array{id: string, status: string, diskName: string}
      *
      * @throws FileNotFoundException ไม่พบไฟล์
-     * @throws FileAlreadyDeletedException ไฟล์ถูก soft delete ไปแล้ว
      */
-    public function delete(string $id, ?string $userId = null): array
+    public function delete(string $id, ?string $userId = null): ServiceResult
     {
         $file = $this->storageFileDbRepository->findWithTrashed($id);
 
@@ -278,12 +282,10 @@ class FileStorageService
      *
      * @param  string  $id  UUID ของไฟล์
      * @param  string|null  $userId  UUID ของผู้ลบ
-     * @return array{id: string, status: string, diskName: string, job: string}
      *
      * @throws FileNotFoundException ไม่พบไฟล์
-     * @throws FileNotDeletedException ไฟล์ยังไม่ถูก soft delete
      */
-    public function forceDelete(string $id, ?string $userId = null): array
+    public function forceDelete(string $id, ?string $userId = null): ServiceResult
     {
         $file = $this->storageFileDbRepository->findWithTrashed($id);
 
@@ -412,7 +414,7 @@ class FileStorageService
      */
     public function findFile(string $id): ?StorageFiles
     {
-        return $this->storageFileDbRepository->find($id);
+        return $this->storageFileDbRepository->find($id, ['storageDisk']);
     }
 
     /**

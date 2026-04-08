@@ -22,7 +22,7 @@ final class ImageBase64Converter
      * ดึง Base64 data จาก data URI string
      *
      * @param  string  $imgsrc  data URI (เช่น "data:image/png;base64,...")
-     * @return string|false Base64 string หรือ false ถ้า format ไม่ถูกต้อง
+     * @return false|string Base64 string หรือ false ถ้า format ไม่ถูกต้อง
      */
     public function getBase64FromDataUri(string $imgsrc = ''): string|false
     {

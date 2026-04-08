@@ -33,8 +33,8 @@ class PasswordResetService
     public function __construct(
         private readonly JwtHelper $jwtService,
     ) {
-        $this->tokenTtl = (int) config('auth.jwt.delay', 86400);
-        $this->jwtKey = (string) config('auth.jwt.key', '');
+        $this->tokenTtl = (int) config('core.base.crypto.jwt.delay', 86400);
+        $this->jwtKey = (string) config('core.base.crypto.jwt.secret', '');
     }
 
     // =========================================================================
@@ -70,8 +70,8 @@ class PasswordResetService
         // สร้าง ForgetPasswordToken ใหม่
         $tokenRecord = new ForgetPasswordToken;
         $tokenRecord->email = $email;
-        $tokenRecord->data = json_encode_th([]);
-        $tokenRecord->expires_at = now()->addSeconds($this->tokenTtl)->toDateTimeString();
+        $tokenRecord->data = []; // Assign as array, Eloquent will handle casting/encoding
+        $tokenRecord->expires_at = now()->addSeconds($this->tokenTtl);
         $tokenRecord->save();
 
         return $this->success('สำเร็จ', [
@@ -137,6 +137,33 @@ class PasswordResetService
         });
 
         return $this->success('เปลี่ยนรหัสผ่านสำเร็จ', ['user' => $user], 201);
+    }
+
+    /**
+     * เปลี่ยนรหัสผ่านให้ผู้ใช้ (สำหรับ User ที่ล็อกอินแล้ว)
+     *
+     * @param  User  $user  อ็อบเจ็กต์ผู้ใช้ปัจจุบัน
+     * @param  string  $currentPassword  รหัสผ่านปัจจุบัน
+     * @param  string  $newPassword  รหัสผ่านใหม่
+     * @return array{status: bool, message: string, data: mixed, code: int}
+     */
+    public function changePassword(User $user, string $currentPassword, string $newPassword): array
+    {
+        if ($currentPassword === $newPassword) {
+            return $this->fail('Validation Error', 400, [
+                'current_password' => ['รหัสผ่านปัจจุบันและรหัสผ่านใหม่ตรงกัน ควรทำให้แตกต่างกัน'],
+            ]);
+        }
+
+        if (! Hash::check($currentPassword, $user->password)) {
+            return $this->fail('Validation Error', 400, [
+                'current_password' => ['รหัสผ่านปัจจุบันไม่ถูกต้อง'],
+            ]);
+        }
+
+        $user->update(['password' => Hash::make($newPassword)]);
+
+        return $this->success('เปลี่ยนรหัสผ่านสำเร็จ', true, 200);
     }
 
     /**

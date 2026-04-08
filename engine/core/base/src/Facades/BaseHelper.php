@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static bool isApiRequest()
  * @method static string generateSlug(string $string)
  * @method static string extractBaseDomain(string $url)
+ * @method static string humanFilesize(int $bytes, int $decimals = 2)
+ * @method static string jsonEncodePrettify(mixed $data, int $flags = 0)
  *
  * @see AppContext
  */

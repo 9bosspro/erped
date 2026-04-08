@@ -5,18 +5,20 @@ declare(strict_types=1);
 namespace Core\Base\Traits;
 
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 
+/**
+ * BaseModelTrait — ฟังก์ชันเสริมสำหรับ Eloquent Model
+ *
+ * ครอบคลุม: ดึง column listing, สร้าง unique UUID, และ save ที่รองรับ composite PK
+ */
 trait BaseModelTrait
 {
-    protected static array $cache = [];
-
     /**
      * ดึงรายการ column ทั้งหมดของ table ปัจจุบัน
      *
      * @return array<string>
      */
-    public function list_Columns(): array
+    public function listColumns(): array
     {
         return $this->getConnection()
             ->getSchemaBuilder()
@@ -30,7 +32,7 @@ trait BaseModelTrait
      * @param  string  $db  ชื่อ database connection (default: 'mysql2')
      * @return array<string>
      */
-    public function listColumn2(string $table, string $db = 'mysql2'): array
+    public function listColumnsForConnection(string $table, string $db = 'mysql2'): array
     {
         return Schema::connection($db)->getColumnListing($table);
     }
@@ -41,18 +43,19 @@ trait BaseModelTrait
      * วนซ้ำจนกว่าจะได้ UUID ที่ไม่ซ้ำใน DB
      * ใช้เฉพาะเมื่อจำเป็น — ควรใช้ UNIQUE constraint ของ DB แทนถ้าทำได้
      *
-     * @param  string  $code  ชื่อ column ที่ต้องการตรวจสอบความซ้ำ
-     * @return string UUID ที่ไม่ซ้ำ หรือ '' ถ้า $code ว่าง
+     * @param  string  $column  ชื่อ column ที่ต้องการตรวจสอบความซ้ำ
+     * @return string UUID ที่ไม่ซ้ำ หรือ '' ถ้า $column ว่าง
      */
-    public function return_new_uuids(string $code = ''): string
+    public function generateUniqueUuid(string $column = ''): string
     {
-        if ($code === '') {
+        if ($column === '') {
             return '';
         }
 
+        $hashHelper = new \Core\Base\Support\Helpers\Crypto\HashHelper;
         do {
-            $uuid = str_replace('-', '', Str::uuid()->toString());
-        } while ($this->where($code, $uuid)->select($code)->exists());
+            $uuid = $hashHelper->generateId(7, false);
+        } while ($this->where($column, $uuid)->select($column)->exists());
 
         return $uuid;
     }
@@ -66,7 +69,7 @@ trait BaseModelTrait
      * @param  array  $options  ตัวเลือกเพิ่มเติม — รองรับ 'touch' (bool, default: true)
      * @return bool true ถ้าบันทึกสำเร็จ
      */
-    public function savess(array $options = []): bool
+    public function saveComposite(array $options = []): bool
     {
         if (! is_array($this->getKeyName())) {
             return parent::save($options);

@@ -150,10 +150,10 @@ class ProcessFileUpdateUploadJob implements ShouldQueue
     {
         Log::error('ProcessFileUpdateUploadJob: permanently failed after all retries', [
             'storageFileId' => $this->storageFileId,
-            'disk'          => $this->diskName,
-            'new_path'      => $this->newStoragePath,
-            'old_path'      => $this->oldStoragePath,
-            'error'         => $exception->getMessage(),
+            'disk' => $this->diskName,
+            'new_path' => $this->newStoragePath,
+            'old_path' => $this->oldStoragePath,
+            'error' => $exception->getMessage(),
         ]);
 
         try {
@@ -162,30 +162,30 @@ class ProcessFileUpdateUploadJob implements ShouldQueue
 
             if ($storageFile) {
                 // Restore กลับ path เดิม ให้ระบบยังใช้งานได้
-                $storageFile->path      = $this->oldStoragePath;
+                $storageFile->path = $this->oldStoragePath;
                 $storageFile->is_active = true;
-                $storageFile->metadata  = array_merge($storageFile->metadata ?? [], [
+                $storageFile->metadata = array_merge($storageFile->metadata ?? [], [
                     'upload_status' => 'permanently_failed',
-                    'failed_at'     => now()->toISOString(true),
-                    'error'         => $exception->getMessage(),
-                    'restored_to'   => $this->oldStoragePath,
+                    'failed_at' => now()->toISOString(true),
+                    'error' => $exception->getMessage(),
+                    'restored_to' => $this->oldStoragePath,
                 ]);
                 $storageFile->save();
             }
         } catch (Throwable $e) {
             Log::error('ProcessFileUpdateUploadJob: failed to restore status on permanent failure', [
                 'storageFileId' => $this->storageFileId,
-                'error'         => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 
         event(new FileUploadFailed(
-            filename:  $this->storedName,
+            filename: $this->storedName,
             directory: dirname($this->newStoragePath),
-            reason:    $exception->getMessage(),
+            reason: $exception->getMessage(),
             exception: $exception,
-            userId:    $this->userId,
-            driver:    $this->diskName,
+            userId: $this->userId,
+            driver: $this->diskName,
         ));
     }
 

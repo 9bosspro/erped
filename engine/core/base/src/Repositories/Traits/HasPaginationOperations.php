@@ -8,6 +8,9 @@ use Closure;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Pagination\Paginator;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\LazyCollection;
 
 /**
@@ -31,6 +34,7 @@ trait HasPaginationOperations
      * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม
      * @param  array<string>  $relations  eager-load relations
      * @param  array<string, string>  $orderBy  คู่ column => direction
+     * @return LengthAwarePaginator<int, Model>
      */
     public function paginate(
         int $perPage = 15,
@@ -56,6 +60,8 @@ trait HasPaginationOperations
      *
      * รัน query เดียว: SELECT LIMIT n+1 → เร็วกว่า paginate()
      * เหมาะสำหรับ "Load More" button, infinite scroll
+     *
+     * @return Paginator<int, Model>
      */
     public function simplePaginate(
         int $perPage = 15,
@@ -85,6 +91,7 @@ trait HasPaginationOperations
      *
      * @param  string  $cursorColumn  column ที่ใช้เป็น cursor (ต้อง unique + ordered)
      * @param  string  $direction  ทิศทางเรียง 'asc' หรือ 'desc' (default: 'desc' → ข้อมูลใหม่ก่อน)
+     * @return CursorPaginator<int, Model>
      */
     public function cursorPaginate(
         int $perPage = 15,
@@ -111,7 +118,7 @@ trait HasPaginationOperations
      * ไม่โหลดทุก record เข้า memory พร้อมกัน (ประหยัด RAM มาก)
      *
      * @param  int  $chunkSize  จำนวน records ต่อ chunk (default: 1000)
-     * @return LazyCollection iterable ที่สามารถ foreach ได้
+     * @return LazyCollection<int, Model> iterable ที่สามารถ foreach ได้
      */
     public function lazy(int $chunkSize = 1000, ?Closure $queryCallback = null, array $relations = []): LazyCollection
     {
@@ -131,7 +138,7 @@ trait HasPaginationOperations
      * คืน false จาก callback เพื่อหยุด chunking ก่อนครบ
      *
      * @param  int  $count  จำนวน records ต่อ chunk
-     * @param  Closure(Collection): mixed  $callback  callback ที่รับ Collection ของ chunk
+     * @param  Closure(Collection<int, Model>): mixed  $callback  callback ที่รับ Collection ของ chunk
      * @param  Closure(Builder): void|null  $queryCallback  เงื่อนไขเพิ่มเติม
      */
     public function chunk(int $count, Closure $callback, ?Closure $queryCallback = null, array $relations = []): bool

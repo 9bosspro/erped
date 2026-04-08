@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Core\Base\Services\Session\Contracts;
 
 use Illuminate\Http\Request;
+use RuntimeException;
 
 /**
  * DeviceFingerprintServiceInterface — สัญญาสำหรับ Device Fingerprint Service
@@ -35,7 +36,7 @@ interface DeviceFingerprintServiceInterface
      * @param  Request  $request  HTTP request ปัจจุบัน
      * @return string HMAC-SHA256 fingerprint hash
      *
-     * @throws \RuntimeException ถ้า app.key ว่าง
+     * @throws RuntimeException ถ้า app.key ว่าง
      */
     public function fingerprint(Request $request): string;
 

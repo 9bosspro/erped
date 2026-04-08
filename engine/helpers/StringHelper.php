@@ -34,10 +34,10 @@ if (! function_exists('trim_null')) {
      *  3. ลบ HTML/PHP tags (ถ้า $stripTags = true)
      *  4. escape HTML (ถ้า $escapeHtml = true)
      *
-     * @param  mixed   $str         ข้อความที่ต้องการตัด (non-string จะคืน '')
-     * @param  string  $replacement อักขระแทนช่องว่างภายใน (ค่าเริ่มต้น: space)
-     * @param  bool    $stripTags   ลบ HTML และ PHP tags หรือไม่
-     * @param  bool    $escapeHtml  escape HTML entities หรือไม่
+     * @param  mixed  $str  ข้อความที่ต้องการตัด (non-string จะคืน '')
+     * @param  string  $replacement  อักขระแทนช่องว่างภายใน (ค่าเริ่มต้น: space)
+     * @param  bool  $stripTags  ลบ HTML และ PHP tags หรือไม่
+     * @param  bool  $escapeHtml  escape HTML entities หรือไม่
      * @return string ข้อความที่ตัดแล้ว
      */
     function trim_null(mixed $str = '', string $replacement = ' ', bool $stripTags = false, bool $escapeHtml = false): string
@@ -69,9 +69,9 @@ if (! function_exists('trim_all')) {
     /**
      * ตัด whitespace ทุกตำแหน่งจาก string และ normalize เป็น single space
      *
-     * @param  mixed  $value      ข้อความที่ต้องการตัด (non-string จะคืน '')
-     * @param  bool   $stripTags  ลบ HTML และ PHP tags หรือไม่
-     * @param  bool   $escapeHtml escape HTML entities หรือไม่
+     * @param  mixed  $value  ข้อความที่ต้องการตัด (non-string จะคืน '')
+     * @param  bool  $stripTags  ลบ HTML และ PHP tags หรือไม่
+     * @param  bool  $escapeHtml  escape HTML entities หรือไม่
      * @return string ข้อความที่ตัดแล้ว
      */
     function trim_all(mixed $value, bool $stripTags = false, bool $escapeHtml = false): string

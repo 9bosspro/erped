@@ -45,6 +45,8 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
+        $this->authorize('manage', $request->user());
+
         // ทำการเรียก Service สำหรับอัปเดตข้อมูล และส่ง Data Transfer Object (DTO) ไปใช้งาน
         $this->profileService->updateProfile(
             $request->user(),
@@ -68,6 +70,8 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+
+        $this->authorize('manage', $user);
 
         // ให้ออกจากระบบก่อนทำการลบ เพื่อปิดกั้นการเข้าใช้งานที่อาจค้างอยู่ในระบบรวดเร็ว (Session Security)
         Auth::logout();

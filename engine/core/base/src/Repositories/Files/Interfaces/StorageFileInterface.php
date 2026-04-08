@@ -19,6 +19,10 @@ use Core\Base\Repositories\Interfaces\BaseRepositoryInterface;
  *
  * Interface นี้ประกาศเฉพาะ domain-specific methods ของ StorageFiles เท่านั้น
  * ที่ไม่มีใน BaseRepositoryInterface
+ *
+ * @method \App\Models\StorageFiles|null find(int|string $id, array $relations = [])
+ * @method \App\Models\StorageFiles findOrFail(int|string $id, array $relations = [])
+ * @method \App\Models\StorageFiles|null findWithTrashed(string $id, array $relations = [])
  */
 interface StorageFileInterface extends BaseRepositoryInterface
 {

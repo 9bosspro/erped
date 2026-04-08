@@ -14,58 +14,61 @@ use RuntimeException;
 use Throwable;
 
 /**
- * LoadAndPublishDataTrait — โหลดและเผยแพร่ resources ของ module
+ * Trait LoadAndPublishDataTrait
  *
- * ครอบคลุม:
- *  - Configurations, Constants, Helpers
- *  - Translations (PHP + JSON)
- *  - Views, Anonymous Components, Theme Views
- *  - Routes, Migrations, Factories, Seeders
- *  - Assets (public), Console Commands
- *  - Bootstrap: forceSSL, PHP INI
+ * ทะเบียนและเผยแพร่ทรัพยากร (Resources) สำหรับ Module ต่างๆ อย่างเป็นระบบ
+ * ผสานแนวคิด High Performance (ลด I/O operation), Secure & Maintainable
  *
- * ใช้ PathResolverTrait สำหรับ path resolution ทั้งหมด
- * ทุก method คืน static เพื่อรองรับ method chaining
+ * ความสามารถครอบคลุม:
+ * - Configurations, Constants, Helpers (ใช้ glob และ native stat-cache เพื่อความเร็วสูงสุด)
+ * - Translations (PHP, JSON), Views, Components
+ * - Routes, Migrations, Factories, Seeders
+ * - Environment Security (Force SSL, PHP INI tuning)
  */
 trait LoadAndPublishDataTrait
 {
     use PathResolverTrait;
 
     // ─────────────────────────────────────────────────────────────────
-    //  Translations
+    //  Translations (ภาษา)
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * โหลดและ publish translations (PHP files)
+     * โหลดและเตรียม Publish ไฟล์แปลภาษา (PHP Array)
      *
-     * @param  string  $tag  tag สำหรับ artisan vendor:publish
+     * @param  string  $tag  ชื่อ Tag สำหรับ artisan vendor:publish (ค่าเริ่มต้น: 'lang')
      */
     public function loadAndPublishTranslations(string $tag = 'lang'): static
     {
         $path = $this->getTranslationsPath();
-        $namespace = $this->getDashedNamespace();
 
-        if (! File::isDirectory($path)) {
+        // ระดับ Production: ใช้ is_dir() ตรงๆ แทน File::isDirectory() เพื่อดึงพลังการ Caching ของ PHP Native
+        if (! is_dir($path)) {
             return $this;
         }
 
+        $namespace = $this->getDashedNamespace();
         $this->loadTranslationsFrom($path, $namespace);
-        $this->publishes(
-            [$path => lang_path('vendor'.DIRECTORY_SEPARATOR.$namespace)],
-            $namespace.'-'.$tag,
-        );
+
+        // ตรวจสอบ Console mode เพื่อข้ามการ Publish ตอน HTTP Request (Performance)
+        if ($this->app->runningInConsole()) {
+            $this->publishes(
+                [$path => lang_path('vendor'.DIRECTORY_SEPARATOR.$namespace)],
+                $namespace.'::'.$tag,
+            );
+        }
 
         return $this;
     }
 
     /**
-     * โหลด JSON translations (สำหรับภาษาไทยและ multi-locale)
+     * โหลดไฟล์แปลภาษาแบบ JSON (สำหรับระบบรองรับหลายภาษาแบบรวดเร็ว)
      */
-    public function loadAndPublishTranslationsjson(): static
+    public function loadAndPublishTranslationsJson(): static
     {
         $path = $this->getTranslationsPath();
 
-        if (File::isDirectory($path)) {
+        if (is_dir($path)) {
             $this->loadJsonTranslationsFrom($path);
         }
 
@@ -73,154 +76,105 @@ trait LoadAndPublishDataTrait
     }
 
     // ─────────────────────────────────────────────────────────────────
-    //  Configurations
+    //  Configurations (การตั้งค่า)
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * โหลดและ publish configuration files
+     * โหลดและใช้งาน Configuration files ของ Module
+     * พร้อมรองรับการ Publish ไปยัง config หลักของโปรเจ็กต์
      *
-     * @param  array<int, string>  $fileNames  ชื่อไฟล์ (ไม่ต้องใส่ .php)
-     *                                         ถ้าว่างจะโหลดทั้ง config folder
-     * @param  string  $tag  tag สำหรับ artisan vendor:publish
+     * @param  array<int, string>  $fileNames  รายชื่อไฟล์ config ไม่ต้องใส่ .php (หากปล่อยว่างจะโหลดทั้งหมด)
+     * @param  string  $tag  ชื่อ Tag สำหรับ artisan vendor:publish (ค่าเริ่มต้น: 'config')
      */
-    protected function loadAndPublishConfigurations(array $fileNames = [], string $tag = 'config'): static
+    public function loadAndPublishConfigurations(array $fileNames = [], string $tag = 'config'): static
     {
         $configPath = $this->getConfigPath();
 
-        if (empty($fileNames)) {
-            $fileNames = File::isDirectory($configPath)
-                ? $this->getPhpFileNames($configPath)
-                : [];
-        }
-
-        foreach ($fileNames as $file) {
-            $fullPath = $configPath.Str::finish($file, '.php');
-
-            if (! File::exists($fullPath)) {
-                continue;
-            }
-
-            $relativeName = Str::beforeLast(
-                $this->getRelativePathFromModule($fullPath, 'config'),
-                '.php',
-            );
-
-            $configKey = $relativeName === 'config'
-                ? $this->getDottedNamespace()
-                : $this->getDottedNamespace().'.'.str_replace(DIRECTORY_SEPARATOR, '.', $relativeName);
-
-            $this->mergeConfigFrom($fullPath, $configKey);
-
-            if ($this->app->runningInConsole()) {
-                $this->publishes([
-                    $fullPath => config_path(
-                        $this->getDottedNamespace().DIRECTORY_SEPARATOR.$relativeName.'.php',
-                    ),
-                ], $this->getDottedNamespace().'-'.$tag);
-            }
-        }
-
-        return $this;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    //  Constants
-    // ─────────────────────────────────────────────────────────────────
-
-    /**
-     * โหลด PHP constant files
-     *
-     * @param  array<int, string>  $files  ชื่อไฟล์ (ไม่ต้องใส่ .php)
-     *                                     ถ้าว่างโหลดทั้ง constants folder
-     */
-    protected function loadConstants(array $files = []): static
-    {
-        $constantsPath = $this->getConstantsPath();
-
-        if (empty($files)) {
-            $files = File::isDirectory($constantsPath)
-                ? $this->getPhpFileNames($constantsPath)
-                : [];
-        }
-
-        foreach ($files as $file) {
-            $fullPath = $constantsPath.Str::finish($file, '.php');
-
-            if (! File::exists($fullPath)) {
-                continue;
-            }
-
-            try {
-                require_once $fullPath;
-            } catch (Throwable $e) {
-                logger()->error("Failed to load constant: {$fullPath} — ".$e->getMessage());
-            }
-        }
-
-        return $this;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    //  Helpers
-    // ─────────────────────────────────────────────────────────────────
-
-    /**
-     * โหลด helper files (ลงท้ายด้วย Helper.php)
-     *
-     * @param  array<int, string>  $files  prefix ของไฟล์ เช่น 'Common' → CommonHelper.php
-     *                                     ถ้าว่างโหลดทุกไฟล์ใน helpers folder
-     */
-    protected function loadHelpers(array $files = []): static
-    {
-        $helpersPath = $this->getHelpersPath();
-
-        if (empty($files)) {
-            $files = File::isDirectory($helpersPath)
-                ? $this->getPhpFileNames($helpersPath)
-                : [];
-        }
-
-        foreach ($files as $file) {
-            $fullPath = $helpersPath.Str::finish($file, 'Helper.php');
-
-            if (! File::exists($fullPath)) {
-                continue;
-            }
-
-            try {
-                require_once $fullPath;
-            } catch (Throwable $e) {
-                logger()->error("Failed to load helper: {$fullPath} — ".$e->getMessage());
-            }
-        }
-
-        return $this;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    //  Views
-    // ─────────────────────────────────────────────────────────────────
-
-    /**
-     * โหลดและ publish views
-     *
-     * @param  string  $tag  tag สำหรับ artisan vendor:publish
-     */
-    protected function loadAndPublishViews(string $tag = 'views'): static
-    {
-        $viewsPath = $this->getViewsPath();
-        $namespace = $this->getDashedNamespace();
-
-        if (! File::isDirectory($viewsPath)) {
+        if (! is_dir($configPath)) {
             return $this;
         }
 
+        $filesToLoad = empty($fileNames) ? $this->getPhpFileNames($configPath) : $fileNames;
+        $dottedNamespace = $this->getDottedNamespace();
+
+        // Batch publish array ลดการเรียก function publishes ถี่เกินไป
+        $publishList = [];
+
+        foreach ($filesToLoad as $file) {
+            $fullPath = $configPath.Str::finish($file, '.php');
+
+            if (! is_file($fullPath)) {
+                continue;
+            }
+
+            $relativeName = Str::beforeLast($this->getRelativePathFromModule($fullPath, 'config'), '.php');
+            $configKey = $relativeName === 'config'
+                ? $dottedNamespace
+                : $dottedNamespace.'::'.str_replace(DIRECTORY_SEPARATOR, '.', $relativeName);
+            $this->mergeConfigFrom($fullPath, $configKey);
+
+            if ($this->app->runningInConsole()) {
+                $publishDest = config_path($dottedNamespace.DIRECTORY_SEPARATOR.$relativeName.'.php');
+                $publishList[$fullPath] = $publishDest;
+            }
+        }
+
+        if (! empty($publishList)) {
+            $this->publishes($publishList, $dottedNamespace.'::'.$tag);
+        }
+
+        return $this;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    //  Constants & Helpers (ค่าคงที่และฟังก์ชันช่วยเหลือ)
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * ดึงไฟล์ Constants (PHP) เข้าสู่ระบบ (Performance Optimized)
+     *
+     * @param  array<int, string>  $files  รายชื่อไฟล์ ไม่ต้องใส่ .php
+     */
+    public function loadConstants(array $files = []): static
+    {
+        return $this->loadFilesFromDirectory($this->getConstantsPath(), $files, '.php', 'constant');
+    }
+
+    /**
+     * ดึงไฟล์ Helper Functions (PHP) เข้าสู่ระบบ
+     *
+     * @param  array<int, string>  $files  รายชื่อไฟล์ prefix (เช่น 'Common' เพื่อโหลด CommonHelper.php)
+     */
+    public function loadHelpers(array $files = []): static
+    {
+        return $this->loadFilesFromDirectory($this->getHelpersPath(), $files, 'Helper.php', 'helper');
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    //  Views & Components (หน้าแสดงผลและคอมโพเนนต์)
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * โหลดและจัดเตรียม Views จาก Module
+     * รองรับการ Override จาก Theme อัตโนมัติเมื่อทำการ Publish
+     *
+     * @param  string  $tag  ชื่อ Tag สำหรับ artisan vendor:publish
+     */
+    public function loadAndPublishViews(string $tag = 'views'): static
+    {
+        $viewsPath = $this->getViewsPath();
+
+        if (! is_dir($viewsPath)) {
+            return $this;
+        }
+
+        $namespace = $this->getDashedNamespace();
         $this->loadViewsFrom($viewsPath, $namespace);
 
         if ($this->app->runningInConsole()) {
             $this->publishes(
                 [$viewsPath => resource_path('views'.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.$namespace)],
-                $namespace.'-'.$tag,
+                $namespace.'::'.$tag,
             );
         }
 
@@ -228,14 +182,13 @@ trait LoadAndPublishDataTrait
     }
 
     /**
-     * Prepend view path สำหรับ theme override
-     * ทำให้ module views มี priority สูงกว่า vendor default
+     * ทำให้ Views ของ Module มีความสำคัญลำดับแรกสุด รองรับการทำ Theme overriding
      */
-    protected function loadAndPublishThemeViews(): static
+    public function loadAndPublishThemeViews(): static
     {
         $viewsPath = $this->getViewsPath();
 
-        if (File::isDirectory($viewsPath)) {
+        if (is_dir($viewsPath)) {
             View::prependLocation($viewsPath);
         }
 
@@ -243,13 +196,13 @@ trait LoadAndPublishDataTrait
     }
 
     /**
-     * โหลด Blade anonymous components
+     * ใช้งาน Blade Anonymous Components ที่ฝังอยู่ใน Module
      */
-    protected function loadAnonymousComponents(): static
+    public function loadAnonymousComponents(): static
     {
         $componentsPath = $this->getViewsPath().DIRECTORY_SEPARATOR.'components';
 
-        if (File::isDirectory($componentsPath)) {
+        if (is_dir($componentsPath)) {
             $this->app['blade.compiler']->anonymousComponentPath(
                 $componentsPath,
                 $this->getDashedNamespace(),
@@ -260,23 +213,23 @@ trait LoadAndPublishDataTrait
     }
 
     // ─────────────────────────────────────────────────────────────────
-    //  Routes
+    //  Routes (เส้นทาง API/Web)
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * โหลด route files
+     * โหลดไฟล์ Route ของ Module อย่างปลอดภัย
      *
-     * @param  array<int, string>|string  $fileNames  ชื่อไฟล์ route (ไม่ต้องใส่ .php)
-     * @param  array<int, string>  $middleware  middleware สำหรับ route group (optional)
+     * @param  array<int, string>|string  $fileNames  ชื่อไฟล์ route เช่น 'web', 'api'
+     * @param  array<int, string>  $middleware  กลุ่ม middleware พื้นฐานที่นำมาครอบ
      *
-     * @throws RuntimeException ถ้าไม่พบ route file
+     * @throws RuntimeException หากระบุ route แล้วไม่พบไฟล์
      */
-    protected function loadRoutes(array|string $fileNames = ['web'], array $middleware = []): static
+    public function loadRoutes(array|string $fileNames = ['web'], array $middleware = []): static
     {
         foreach ((array) $fileNames as $fileName) {
             $filePath = $this->getRouteFilePath($fileName);
 
-            if (! File::exists($filePath)) {
+            if (! is_file($filePath)) {
                 throw new RuntimeException("Route file not found: {$filePath}");
             }
 
@@ -291,17 +244,17 @@ trait LoadAndPublishDataTrait
     }
 
     // ─────────────────────────────────────────────────────────────────
-    //  Database
+    //  Database Resources (ฐานข้อมูล)
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * โหลด database migrations
+     * โหลดโครงสร้างฐานข้อมูล (Migrations)
      */
-    protected function loadMigrations(): static
+    public function loadMigrations(): static
     {
         $path = $this->getMigrationsPath();
 
-        if (File::isDirectory($path)) {
+        if (is_dir($path)) {
             $this->loadMigrationsFrom($path);
         }
 
@@ -309,13 +262,13 @@ trait LoadAndPublishDataTrait
     }
 
     /**
-     * โหลด model factories
+     * โหลดการจำลองข้อมูลสำหรับ Database (Factories)
      */
-    protected function loadFactories(): static
+    public function loadFactories(): static
     {
         $path = $this->getFactoriesPath();
 
-        if (File::isDirectory($path)) {
+        if (is_dir($path)) {
             $this->loadFactoriesFrom($path);
         }
 
@@ -323,13 +276,13 @@ trait LoadAndPublishDataTrait
     }
 
     /**
-     * โหลด database seeders
+     * โหลดชุดตัวอย่างข้อมูลเริ่มต้น (Seeders)
      */
-    protected function loadSeeders(): static
+    public function loadSeeders(): static
     {
         $path = $this->getSeedersPath();
 
-        if (File::isDirectory($path)) {
+        if (is_dir($path)) {
             $this->loadSeedersFrom($path);
         }
 
@@ -337,20 +290,23 @@ trait LoadAndPublishDataTrait
     }
 
     // ─────────────────────────────────────────────────────────────────
-    //  Assets & Commands
+    //  Assets, Commands & Security (ทรัพยากรอื่นๆ และความปลอดภัย)
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Publish static assets ไปยัง public/vendor/core/{namespace}
+     * เปิดสิทธิ์ให้ย้าย (Publish) Static Assets (CSS, JS, Images) เข้าไปยัง public folder
      *
-     * @param  string  $tag  tag สำหรับ artisan vendor:publish
+     * @param  string  $tag  ชื่อ Tag
      */
-    protected function publishAssets(string $tag = 'public'): static
+    public function publishAssets(string $tag = 'public'): static
     {
-        $assetsPath = $this->getAssetsPath();
-        $namespace = $this->getDashedNamespace();
+        if (! $this->app->runningInConsole()) {
+            return $this;
+        }
 
-        if (File::isDirectory($assetsPath)) {
+        $assetsPath = $this->getAssetsPath();
+        if (is_dir($assetsPath)) {
+            $namespace = $this->getDashedNamespace();
             $this->publishes(
                 [$assetsPath => public_path('vendor'.DIRECTORY_SEPARATOR.'core'.DIRECTORY_SEPARATOR.$namespace)],
                 $namespace.'-'.$tag,
@@ -361,31 +317,24 @@ trait LoadAndPublishDataTrait
     }
 
     /**
-     * ลงทะเบียน console commands (เฉพาะ console context เท่านั้น)
+     * บรรจุ Artisan Commands เฉพาะเมื่อรันผ่าน Console
      *
-     * @param  array<int, class-string>  $commands
+     * @param  array<int, class-string>  $commands  คลาส Commands ย่อย
      */
-    protected function loadCommandsAndSchedules(array $commands): static
+    public function loadCommandsAndSchedules(array $commands): static
     {
-        if ($this->app->runningInConsole()) {
+        if ($this->app->runningInConsole() && ! empty($commands)) {
             $this->commands($commands);
         }
 
         return $this;
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    //  Bootstrap: SSL + PHP INI
-    // ─────────────────────────────────────────────────────────────────
-
     /**
-     * Force HTTPS ใน production/staging หรือเมื่อ config กำหนด
-     *
-     * ตรวจสอบ 2 เงื่อนไข:
-     *  1. config('core.base.myapp.force_ssl') = true
-     *  2. environment เป็น production/staging และไม่ได้รัน unit tests
+     * บังคับให้ระบบส่งออกเป็น HTTPS
+     * (ช่วยเพิ่ม Secure Layer เมื่อทำงานผ่าน Proxy/LoadBalancer)
      */
-    protected function forceSSL(): static
+    public function forceSSL(): static
     {
         $shouldForce = config('core.base.myapp.force_ssl')
             || (app()->environment(['production', 'staging']) && ! app()->runningUnitTests());
@@ -398,12 +347,10 @@ trait LoadAndPublishDataTrait
     }
 
     /**
-     * ปรับ memory_limit และ max_execution_time จาก config
-     *
-     * Logic: เพิ่มได้อย่างเดียว ไม่ลดลงจากค่าปัจจุบัน
-     * เพื่อป้องกันกรณีที่ server ตั้งค่าไว้สูงกว่า config
+     * ควบคุมและจูนสภาพแวดล้อม PHP อย่างชาญฉลาด (PHP INI Tuning)
+     * ทำหน้าที่เพิ่ม Limits ให้เพียงพอต่อ Business Logic ภายใน Module (ห้ามลด)
      */
-    protected function configureIni(): static
+    public function configureIni(): static
     {
         $helper = new PhpConfigManager;
         $baseConfig = $this->app['config']->get('core.base.general', []);
@@ -414,15 +361,45 @@ trait LoadAndPublishDataTrait
         return $this;
     }
 
+    /**
+     * Core logic สำหรับโหลดไฟล์ PHP เข้าสู่ Runtime ป้องกันการเขียน Source code ซ้ำซ้อน (DRY)
+     *
+     * @param  string  $path  พาร์ทโฟลเดอร์ของไฟล์
+     * @param  array<string>  $files  ชื่อไฟล์ต่างๆ
+     * @param  string  $suffix  นามสกุลไฟล์หรือ prefix (เช่น .php หรือ Helper.php)
+     * @param  string  $type  ประเภทไฟล์ (สำหรับการล็อกเก็บประวัติ Error)
+     */
+    private function loadFilesFromDirectory(string $path, array $files, string $suffix, string $type): static
+    {
+        if (! is_dir($path)) {
+            return $this;
+        }
+
+        $filesToLoad = empty($files) ? $this->getPhpFileNames($path, $suffix) : $files;
+
+        foreach ($filesToLoad as $file) {
+            $fullPath = rtrim($path, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.Str::finish($file, $suffix);
+
+            if (is_file($fullPath)) {
+                try {
+                    require_once $fullPath;
+                } catch (Throwable $e) {
+                    logger()->error("Failed to load {$type}: {$fullPath} — ".$e->getMessage());
+                }
+            }
+        }
+
+        return $this;
+    }
+
     // ─────────────────────────────────────────────────────────────────
-    //  Private Helpers
+    //  Private Methods (ระบบกลไกภายใน)
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * ปรับ memory_limit — เพิ่มได้อย่างเดียว ไม่ลด
-     *
-     * @param  array<string, mixed>  $config
+     * ตรวจสอบและขยายหน่วยความจำ (Memory Limit) อย่างปลอดภัย
      */
+    /** @param array<string, mixed> $config */
     private function applyMemoryLimit(PhpConfigManager $helper, array $config): void
     {
         $current = (string) @ini_get('memory_limit');
@@ -438,10 +415,9 @@ trait LoadAndPublishDataTrait
     }
 
     /**
-     * ปรับ max_execution_time — เพิ่มได้อย่างเดียว ไม่ลด
-     *
-     * @param  array<string, mixed>  $config
+     * ปรับเพิ่มขีดจำกัดการประมวลผล (Max Execution Time) กรณีที่มีขนาดใหญ่
      */
+    /** @param array<string, mixed> $config */
     private function applyMaxExecutionTime(PhpConfigManager $helper, array $config): void
     {
         $current = (int) @ini_get('max_execution_time');
@@ -453,19 +429,31 @@ trait LoadAndPublishDataTrait
     }
 
     /**
-     * คืนรายชื่อไฟล์ .php ใน directory (ไม่ recursive, ไม่รวมนามสกุล)
+     * ค้นหาไฟล์ .php (หรือระบุ suffix) ด้วย glob ซึ่งทำงานได้เร็วกว่าและประหยัด Resource I/O
+     * และป้องกัน I/O Overhead จากการใช้ File::files() (Symfony Finder wrapper)
      *
-     * ใช้ File::files() (Laravel) แทน scandir/RecursiveIterator (raw PHP)
-     * เพื่อ consistency กับ framework และ testability
-     *
-     * @return array<int, string>
+     * @param  string  $directory  พาธหลัก
+     * @param  string  $suffix  นามสกุลไฟล์ที่ต้องการ (default: .php)
+     * @return array<int, string> คืนรายชื่อไฟล์แบบไม่มี suffix
      */
-    private function getPhpFileNames(string $directory): array
+    private function getPhpFileNames(string $directory, string $suffix = '.php'): array
     {
-        return collect(File::files($directory))
-            ->filter(fn ($f) => $f->getExtension() === 'php')
-            ->map(fn ($f) => $f->getFilenameWithoutExtension())
-            ->values()
-            ->all();
+        $files = glob(rtrim($directory, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'*'.$suffix);
+
+        if ($files === false) {
+            return [];
+        }
+
+        $names = [];
+        $suffixLength = strlen($suffix);
+
+        foreach ($files as $file) {
+            if (is_file($file)) {
+                $basename = basename($file);
+                $names[] = substr($basename, 0, -$suffixLength);
+            }
+        }
+
+        return $names;
     }
 }

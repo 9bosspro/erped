@@ -12,6 +12,8 @@ use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
+use stdClass;
+use Throwable;
 
 /**
  * CacheManager — Cache Helper ที่ครบครัน ปลอดภัย และสอดคล้องกับ Laravel
@@ -113,8 +115,8 @@ final class CacheManager implements CacheManagerInterface
     /**
      * ดึงค่าจาก cache
      *
-     * @param  string  $key      Cache key
-     * @param  mixed   $default  ค่า default ถ้า cache miss
+     * @param  string  $key  Cache key
+     * @param  mixed  $default  ค่า default ถ้า cache miss
      */
     public function get(string $key, mixed $default = null): mixed
     {
@@ -124,9 +126,9 @@ final class CacheManager implements CacheManagerInterface
     /**
      * เก็บค่าใน cache พร้อม TTL
      *
-     * @param  string  $key    Cache key
-     * @param  mixed   $value  ค่าที่ต้องการเก็บ
-     * @param  int     $ttl    Time-to-live (วินาที, default 3600 = 1 ชั่วโมง)
+     * @param  string  $key  Cache key
+     * @param  mixed  $value  ค่าที่ต้องการเก็บ
+     * @param  int  $ttl  Time-to-live (วินาที, default 3600 = 1 ชั่วโมง)
      */
     public function put(string $key, mixed $value, int $ttl = 3600): bool
     {
@@ -138,8 +140,8 @@ final class CacheManager implements CacheManagerInterface
      *
      * ⚠️ ใช้กับข้อมูลที่ไม่เปลี่ยนแปลง หรือมีกลไก invalidation อื่น
      *
-     * @param  string  $key    Cache key
-     * @param  mixed   $value  ค่าที่ต้องการเก็บ
+     * @param  string  $key  Cache key
+     * @param  mixed  $value  ค่าที่ต้องการเก็บ
      */
     public function forever(string $key, mixed $value): bool
     {
@@ -167,8 +169,8 @@ final class CacheManager implements CacheManagerInterface
      *
      * ใช้กับ one-time tokens หรือ single-use values
      *
-     * @param  string  $key      Cache key
-     * @param  mixed   $default  ค่า default ถ้า miss
+     * @param  string  $key  Cache key
+     * @param  mixed  $default  ค่า default ถ้า miss
      */
     public function pull(string $key, mixed $default = null): mixed
     {
@@ -203,7 +205,7 @@ final class CacheManager implements CacheManagerInterface
      * คืน $default ถ้า cache miss หรือค่าที่เก็บไม่ใช่ string
      * ป้องกัน bug จาก type coercion เช่น (string)false = "" หรือ (string)[] = "Array"
      *
-     * @param  string  $key      Cache key
+     * @param  string  $key  Cache key
      * @param  string  $default  ค่า default
      */
     public function getString(string $key, string $default = ''): string
@@ -216,8 +218,8 @@ final class CacheManager implements CacheManagerInterface
     /**
      * ดึงค่าจาก cache แบบ type-safe เป็น int
      *
-     * @param  string  $key      Cache key
-     * @param  int     $default  ค่า default
+     * @param  string  $key  Cache key
+     * @param  int  $default  ค่า default
      */
     public function getInt(string $key, int $default = 0): int
     {
@@ -229,8 +231,8 @@ final class CacheManager implements CacheManagerInterface
     /**
      * ดึงค่าจาก cache แบบ type-safe เป็น float
      *
-     * @param  string  $key      Cache key
-     * @param  float   $default  ค่า default
+     * @param  string  $key  Cache key
+     * @param  float  $default  ค่า default
      */
     public function getFloat(string $key, float $default = 0.0): float
     {
@@ -242,7 +244,7 @@ final class CacheManager implements CacheManagerInterface
     /**
      * ดึงค่าจาก cache แบบ type-safe เป็น array
      *
-     * @param  string   $key      Cache key
+     * @param  string  $key  Cache key
      * @param  mixed[]  $default  ค่า default
      * @return mixed[]
      */
@@ -256,8 +258,8 @@ final class CacheManager implements CacheManagerInterface
     /**
      * ดึงค่าจาก cache แบบ type-safe เป็น bool
      *
-     * @param  string  $key      Cache key
-     * @param  bool    $default  ค่า default
+     * @param  string  $key  Cache key
+     * @param  bool  $default  ค่า default
      */
     public function getBool(string $key, bool $default = false): bool
     {
@@ -280,8 +282,8 @@ final class CacheManager implements CacheManagerInterface
      * $users = $cache->remember('users.active', 600, fn() => User::active()->get());
      * ```
      *
-     * @param  string   $key       Cache key
-     * @param  int      $ttl       Time-to-live (วินาที)
+     * @param  string  $key  Cache key
+     * @param  int  $ttl  Time-to-live (วินาที)
      * @param  Closure  $callback  Closure ที่ดึงข้อมูล (เรียกเมื่อ miss เท่านั้น)
      */
     public function remember(string $key, int $ttl, Closure $callback): mixed
@@ -292,7 +294,7 @@ final class CacheManager implements CacheManagerInterface
     /**
      * Cache ผลลัพธ์ของ Closure ถาวร (ไม่หมดอายุ)
      *
-     * @param  string   $key       Cache key
+     * @param  string  $key  Cache key
      * @param  Closure  $callback  Closure ที่ดึงข้อมูล
      */
     public function rememberForever(string $key, Closure $callback): mixed
@@ -321,10 +323,10 @@ final class CacheManager implements CacheManagerInterface
      * $settings = $cache->rememberWithLock('app.settings', 3600, fn() => Setting::all());
      * ```
      *
-     * @param  string   $key       Cache key
-     * @param  int      $ttl       Time-to-live (วินาที)
+     * @param  string  $key  Cache key
+     * @param  int  $ttl  Time-to-live (วินาที)
      * @param  Closure  $callback  Closure ที่ดึงข้อมูล
-     * @param  int      $lockTtl   Lock timeout สูงสุด (วินาที, default 10)
+     * @param  int  $lockTtl  Lock timeout สูงสุด (วินาที, default 10)
      */
     public function rememberWithLock(
         string $key,
@@ -333,15 +335,15 @@ final class CacheManager implements CacheManagerInterface
         int $lockTtl = 10,
     ): mixed {
         // ── Fast path: ตรวจ cache ก่อนด้วย sentinel (null-safe) ─────
-        $sentinel = new \stdClass();
-        $cached   = Cache::get($key, $sentinel);
+        $sentinel = new stdClass;
+        $cached = Cache::get($key, $sentinel);
 
         if ($cached !== $sentinel) {
             return $cached;
         }
 
         // ── Slow path: ขอ lock และ double-check ──────────────────────
-        $lock = Cache::lock($key . self::LOCK_KEY_SUFFIX, $lockTtl);
+        $lock = Cache::lock($key.self::LOCK_KEY_SUFFIX, $lockTtl);
 
         try {
             // block() รอได้นาน $lockTtl วินาที — throw LockTimeoutException ถ้าหมดเวลา
@@ -368,8 +370,8 @@ final class CacheManager implements CacheManagerInterface
      *
      * ประหยัด network round-trip กับ cache server (Redis pipeline)
      *
-     * @param  string[]  $keys     รายการ keys
-     * @return array<string, mixed>  map ของ key → value (null ถ้า miss)
+     * @param  string[]  $keys  รายการ keys
+     * @return array<string, mixed> map ของ key → value (null ถ้า miss)
      */
     public function many(array $keys): array
     {
@@ -380,7 +382,7 @@ final class CacheManager implements CacheManagerInterface
      * เก็บหลาย key พร้อมกันในครั้งเดียว
      *
      * @param  array<string, mixed>  $values  map ของ key → value
-     * @param  int                   $ttl     Time-to-live (วินาที)
+     * @param  int  $ttl  Time-to-live (วินาที)
      */
     public function putMany(array $values, int $ttl = 3600): bool
     {
@@ -414,10 +416,10 @@ final class CacheManager implements CacheManagerInterface
      *
      * ใช้สำหรับ: distributed lock seed, idempotency key, rate limit init
      *
-     * @param  string  $key    Cache key
-     * @param  mixed   $value  ค่าที่ต้องการเก็บ
-     * @param  int     $ttl    Time-to-live (วินาที)
-     * @return bool  true ถ้าเก็บสำเร็จ (key ไม่เคยมีมาก่อน)
+     * @param  string  $key  Cache key
+     * @param  mixed  $value  ค่าที่ต้องการเก็บ
+     * @param  int  $ttl  Time-to-live (วินาที)
+     * @return bool true ถ้าเก็บสำเร็จ (key ไม่เคยมีมาก่อน)
      */
     public function add(string $key, mixed $value, int $ttl = 3600): bool
     {
@@ -430,9 +432,9 @@ final class CacheManager implements CacheManagerInterface
      * ใช้สำหรับ: page view counter, rate limiting, request throttle
      * ⚠️ ถ้า key ยังไม่มี จะเริ่มจาก 0 + $amount
      *
-     * @param  string  $key     Cache key
-     * @param  int     $amount  จำนวนที่เพิ่ม (default 1)
-     * @return int|bool  ค่าใหม่หลังเพิ่ม, false ถ้า store ไม่รองรับ
+     * @param  string  $key  Cache key
+     * @param  int  $amount  จำนวนที่เพิ่ม (default 1)
+     * @return bool|int ค่าใหม่หลังเพิ่ม, false ถ้า store ไม่รองรับ
      */
     public function increment(string $key, int $amount = 1): int|bool
     {
@@ -442,9 +444,9 @@ final class CacheManager implements CacheManagerInterface
     /**
      * ลดค่าตัวเลขใน cache (atomic)
      *
-     * @param  string  $key     Cache key
-     * @param  int     $amount  จำนวนที่ลด (default 1)
-     * @return int|bool  ค่าใหม่หลังลด, false ถ้า store ไม่รองรับ
+     * @param  string  $key  Cache key
+     * @param  int  $amount  จำนวนที่ลด (default 1)
+     * @return bool|int ค่าใหม่หลังลด, false ถ้า store ไม่รองรับ
      */
     public function decrement(string $key, int $amount = 1): int|bool
     {
@@ -475,8 +477,8 @@ final class CacheManager implements CacheManagerInterface
      * }
      * ```
      *
-     * @param  string  $name     ชื่อ lock
-     * @param  int     $seconds  Lock TTL (วินาที, 0 = ไม่หมดอายุ)
+     * @param  string  $name  ชื่อ lock
+     * @param  int  $seconds  Lock TTL (วินาที, 0 = ไม่หมดอายุ)
      */
     public function lock(string $name, int $seconds = 0): Lock
     {
@@ -518,10 +520,10 @@ final class CacheManager implements CacheManagerInterface
      * $cache->forgetByTags(['users']);
      * ```
      *
-     * @param  string[]  $tags      Tag names สำหรับ grouping
-     * @param  string    $key       Cache key
-     * @param  int       $ttl       Time-to-live (วินาที)
-     * @param  Closure   $callback  Closure ที่ดึงข้อมูล
+     * @param  string[]  $tags  Tag names สำหรับ grouping
+     * @param  string  $key  Cache key
+     * @param  int  $ttl  Time-to-live (วินาที)
+     * @param  Closure  $callback  Closure ที่ดึงข้อมูล
      */
     public function rememberTags(array $tags, string $key, int $ttl, Closure $callback): mixed
     {
@@ -531,9 +533,9 @@ final class CacheManager implements CacheManagerInterface
     /**
      * RememberForever พร้อม tags
      *
-     * @param  string[]  $tags      Tag names สำหรับ grouping
-     * @param  string    $key       Cache key
-     * @param  Closure   $callback  Closure ที่ดึงข้อมูล
+     * @param  string[]  $tags  Tag names สำหรับ grouping
+     * @param  string  $key  Cache key
+     * @param  Closure  $callback  Closure ที่ดึงข้อมูล
      */
     public function rememberForeverTags(array $tags, string $key, Closure $callback): mixed
     {
@@ -590,9 +592,9 @@ final class CacheManager implements CacheManagerInterface
      *
      * key = sha1(url) — สั้น (40 chars) และ unique เพียงพอ
      *
-     * @param  string  $url      URL ที่ใช้เป็น cache key
+     * @param  string  $url  URL ที่ใช้เป็น cache key
      * @param  string  $content  Response content (HTML/JSON)
-     * @param  int     $ttl      Time-to-live (วินาที, default 60)
+     * @param  int  $ttl  Time-to-live (วินาที, default 60)
      */
     public function cacheResponse(string $url, string $content, int $ttl = 60): void
     {
@@ -602,7 +604,7 @@ final class CacheManager implements CacheManagerInterface
     /**
      * ดึง cached HTTP response ตาม URL
      *
-     * @return string|null  content ถ้า cache hit, null ถ้า miss
+     * @return string|null content ถ้า cache hit, null ถ้า miss
      */
     public function getCachedResponse(string $url): ?string
     {
@@ -642,7 +644,7 @@ final class CacheManager implements CacheManagerInterface
      *  "user@domain.com"  → "user_domain.com"
      *
      * @param  string  $key  Cache key ดิบ
-     * @return string  key ที่ปลอดภัย
+     * @return string key ที่ปลอดภัย
      */
     public function sanitizeKey(string $key): string
     {
@@ -659,12 +661,12 @@ final class CacheManager implements CacheManagerInterface
      *  prefixed('api.v2', 'users')    → 'api.v2:users'
      *
      * @param  string  $prefix  Namespace prefix (เช่น 'user', 'order', module name)
-     * @param  string  $key     Cache key
-     * @return string  key ในรูป "prefix:key"
+     * @param  string  $key  Cache key
+     * @return string key ในรูป "prefix:key"
      */
     public function prefixed(string $prefix, string $key): string
     {
-        return $prefix . ':' . $key;
+        return $prefix.':'.$key;
     }
 
     /**
@@ -688,7 +690,7 @@ final class CacheManager implements CacheManagerInterface
     {
         try {
             return Cache::getStore() instanceof TaggableStore;
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return false;
         }
     }
@@ -702,6 +704,6 @@ final class CacheManager implements CacheManagerInterface
      */
     private function makeResponseKey(string $url): string
     {
-        return self::RESPONSE_KEY_PREFIX . sha1($url);
+        return self::RESPONSE_KEY_PREFIX.sha1($url);
     }
 }

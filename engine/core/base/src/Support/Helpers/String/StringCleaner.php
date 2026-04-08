@@ -204,12 +204,6 @@ final class StringCleaner
         return $this->cleanNbsp($str);
     }
 
-    /** @deprecated ใช้ dataReady() แทน */
-    public function dataready(mixed $data): string
-    {
-        return $this->dataReady($data);
-    }
-
     /** @deprecated ใช้ removeSpecialChars() แทน */
     public function removespecialchar(string $value): string
     {
@@ -217,6 +211,7 @@ final class StringCleaner
     }
 
     /** @deprecated ใช้ censorWords() แทน */
+    /** @param array<string> $censored */
     public function word_censors(string $str, array $censored, string $replacement = ''): string
     {
         return $this->censorWords($str, $censored, $replacement);

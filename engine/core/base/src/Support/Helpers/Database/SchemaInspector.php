@@ -47,7 +47,7 @@ final class SchemaInspector
         $schema = Schema::connection($connection);
         $columns = $schema->getColumnListing($table);
 
-        return array_map(fn($column) => [
+        return array_map(fn ($column) => [
             'field' => $column,
             'type' => $schema->getColumnType($table, $column),
         ], $columns);

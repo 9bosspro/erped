@@ -135,4 +135,3 @@ if (! function_exists('check_citizen_id')) {
         return $checkDigit === (int) $id[12];
     }
 }
-

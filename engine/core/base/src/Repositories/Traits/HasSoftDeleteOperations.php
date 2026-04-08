@@ -6,6 +6,7 @@ namespace Core\Base\Repositories\Traits;
 
 use Closure;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -35,7 +36,10 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        return $this->newQuery()
+        /** @var Builder $query */
+        $query = $this->newQuery();
+
+        return $query
             ->withTrashed()
             ->with($relations)
             ->find($id);
@@ -51,7 +55,10 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        return $this->newQuery()
+        /** @var Builder $query */
+        $query = $this->newQuery();
+
+        return $query
             ->onlyTrashed()
             ->with($relations)
             ->find($id);
@@ -68,7 +75,9 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        $query = $this->newQuery()->withTrashed()->with($relations);
+        /** @var Builder $query */
+        $query = $this->newQuery();
+        $query = $query->withTrashed()->with($relations);
 
         foreach ($orderBy as $column => $direction) {
             $query->orderBy($column, $direction);
@@ -88,7 +97,9 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        $query = $this->newQuery()->onlyTrashed()->with($relations);
+        /** @var Builder $query */
+        $query = $this->newQuery();
+        $query = $query->onlyTrashed()->with($relations);
 
         foreach ($orderBy as $column => $direction) {
             $query->orderBy($column, $direction);
@@ -108,7 +119,9 @@ trait HasSoftDeleteOperations
     ): LengthAwarePaginator {
         $this->assertSoftDeletable();
 
-        $query = $this->newQuery()->onlyTrashed()->with($relations);
+        /** @var Builder $query */
+        $query = $this->newQuery();
+        $query = $query->onlyTrashed()->with($relations);
 
         if ($queryCallback !== null) {
             $queryCallback($query);
@@ -131,7 +144,10 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        $model = $this->newQuery()
+        /** @var Builder $query */
+        $query = $this->newQuery();
+
+        $model = $query
             ->onlyTrashed()
             ->whereKey($id)
             ->first();
@@ -153,7 +169,10 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        $models = $this->newQuery()
+        /** @var Builder $query */
+        $query = $this->newQuery();
+
+        $models = $query
             ->onlyTrashed()
             ->where($conditions)
             ->get();
@@ -181,7 +200,10 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        $model = $this->newQuery()
+        /** @var Builder $query */
+        $query = $this->newQuery();
+
+        $model = $query
             ->withTrashed()
             ->whereKey($id)
             ->first();
@@ -203,7 +225,10 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        $models = $this->newQuery()
+        /** @var Builder $query */
+        $query = $this->newQuery();
+
+        $models = $query
             ->withTrashed()
             ->where($conditions)
             ->get();
@@ -229,7 +254,9 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        $query = $this->newQuery()->onlyTrashed();
+        /** @var Builder $query */
+        $query = $this->newQuery();
+        $query = $query->onlyTrashed();
 
         if ($queryCallback !== null) {
             $queryCallback($query);
@@ -251,7 +278,10 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        return $this->newQuery()
+        /** @var Builder $query */
+        $query = $this->newQuery();
+
+        return $query
             ->onlyTrashed()
             ->where($conditions)
             ->restore();
@@ -270,7 +300,10 @@ trait HasSoftDeleteOperations
     {
         $this->assertSoftDeletable();
 
-        return $this->newQuery()
+        /** @var Builder $query */
+        $query = $this->newQuery();
+
+        return $query
             ->withTrashed()
             ->where($conditions)
             ->forceDelete();

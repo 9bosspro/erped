@@ -208,83 +208,20 @@ if (! function_exists('baht_text')) {
      */
     function baht_text(float|int $amount): string
     {
-        $amount = number_format((float) $amount, 2, '.', '');
-
-        [$baht, $satang] = explode('.', $amount);
-
-        $text = '';
-
-        if ((int) $baht > 0) {
-            $text .= convert_number_to_thai_words((int) $baht).'บาท';
-        }
-
-        if ((int) $satang > 0) {
-            $text .= convert_number_to_thai_words((int) $satang).'สตางค์';
-        } else {
-            $text .= 'ถ้วน';
-        }
-
-        return $text;
+        return Core\Base\Support\Helpers\Localization\ThaiBahtHelper::convert($amount);
     }
 }
 
 if (! function_exists('convert_number_to_thai_words')) {
     /**
-     * แปลงตัวเลข integer เป็นคำอ่านภาษาไทย
-     *
-     * รองรับตัวเลขสูงสุดถึงหลักล้าน (recursive)
+     * แปลงตัวเลข integer เป็นคำอ่านภาษาไทย (Backward Compatibility)
      *
      * @param  int  $number  ตัวเลขที่ต้องการแปลง
      * @return string คำอ่านภาษาไทย
      */
     function convert_number_to_thai_words(int $number): string
     {
-        if ($number === 0) {
-            return '';
-        }
-
-        // จัดการกรณีเกินล้าน (recursive)
-        if ($number > 1_000_000) {
-            $millions = (int) ($number / 1_000_000);
-            $remainder = $number % 1_000_000;
-
-            $result = convert_number_to_thai_words($millions).'ล้าน';
-            if ($remainder > 0) {
-                $result .= convert_number_to_thai_words($remainder);
-            }
-
-            return $result;
-        }
-
-        $units = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
-        $positions = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน'];
-
-        $str = (string) $number;
-        $len = strlen($str);
-        $result = '';
-
-        for ($i = 0; $i < $len; $i++) {
-            $digit = (int) $str[$i];
-            $pos = $len - $i - 1;
-
-            if ($digit === 0) {
-                continue;
-            }
-
-            if ($digit === 2 && $pos === 1) {
-                $result .= 'ยี่';
-            } elseif ($digit === 1 && $pos === 1) {
-                $result .= 'เอ็ด';
-            } elseif ($digit === 1 && $pos === 0 && $len > 1) {
-                $result .= 'เอ็ด';
-            } else {
-                $result .= $units[$digit];
-            }
-
-            $result .= $positions[$pos];
-        }
-
-        return $result;
+        return Core\Base\Support\Helpers\Localization\ThaiBahtHelper::numberToThaiWords($number);
     }
 }
 
@@ -294,31 +231,13 @@ if (! function_exists('convert_number_to_thai_words')) {
 
 if (! function_exists('uuid7')) {
     /**
-     * สร้าง UUID v7 (time-ordered) แบบ thread-safe
-     *
-     * UUID v7 เรียงตามเวลา — เหมาะสำหรับใช้เป็น primary key ใน DB
-     * ประสิทธิภาพดีกว่า UUID v4 เพราะ index เรียงตามเวลาได้
-     *
-     * หมายเหตุ: Laravel 11+ มี Str::uuid7() ในตัว
-     * ควรใช้ Str::uuid7() แทนถ้า Laravel >= 11
+     * สร้าง UUID v7 (time-ordered)
      *
      * @return string UUID v7 format: xxxxxxxx-xxxx-7xxx-8xxx-xxxxxxxxxxxx
      */
     function uuid7(): string
     {
-        $time = (int) (microtime(true) * 1000);
-        $rand = random_bytes(10);
-        $timeHex = sprintf('%013x', $time);
-        $randHex = bin2hex($rand);
-
-        return sprintf(
-            '%08s-%04s-7%03s-8%03s-%012s',
-            substr($timeHex, 0, 8),
-            substr($timeHex, 8, 4),
-            substr($timeHex, 12, 3),
-            substr($randHex, 0, 3),
-            substr($randHex, 3),
-        );
+        return Str::uuid7()->toString();
     }
 }
 

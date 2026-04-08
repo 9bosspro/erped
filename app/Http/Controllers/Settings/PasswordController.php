@@ -38,6 +38,8 @@ class PasswordController extends Controller
      */
     public function update(PasswordUpdateRequest $request): RedirectResponse
     {
+        $this->authorize('manage', $request->user());
+
         // ส่งต่อไปยัง PasswordService เพื่อจัดการเรื่องของฐานข้อมูล โดยใช้ DTO
         $this->passwordService->updatePassword(
             $request->user(),

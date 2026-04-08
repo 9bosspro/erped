@@ -6,12 +6,13 @@ namespace Core\Base\Http\Middleware;
 
 use App\Models\User;
 use Closure;
+use Core\Base\Services\Security\TokenBlacklistService;
 use Core\Base\Support\Helpers\Crypto\JwtHelper;
-use Core\Base\Services\Crypto\TokenBlacklistService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 /**
  * AuthenticateJwt — Middleware ตรวจสอบ JWT token จาก Bearer header
@@ -61,7 +62,7 @@ class AuthenticateJwt
         // 1. Parse + validate (signature, expiration, issuer, audience)
         try {
             $parsed = $this->jwtService->parse($token);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::debug('JWT_AUTH_FAILED', ['reason' => $e->getMessage()]);
 
             return $this->unauthorized('Token ไม่ถูกต้องหรือหมดอายุ');

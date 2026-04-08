@@ -45,7 +45,7 @@ class Httpclients
         return Http::withHeaders([
             'Accept' => 'application/json',
             'Authorization' => "Bearer {$accessToken}",
-        ])->post(config('auth.auth_sso_host') . '/api/v1/me');
+        ])->post(config('auth.auth_sso_host').'/api/v1/me');
     }
 
     /**
@@ -59,7 +59,7 @@ class Httpclients
         $response = Http::withHeaders([
             'Accept' => 'application/json',
             'Authorization' => "Bearer {$accessToken}",
-        ])->post(config('auth.auth_sso_host') . '/api/v1/currentAccessToken');
+        ])->post(config('auth.auth_sso_host').'/api/v1/currentAccessToken');
 
         return $response->json();
     }
@@ -116,7 +116,7 @@ class Httpclients
         );
 
         $response = Http::asForm()->post(
-            config('auth.sso_host') . '/oauth/token',
+            config('auth.sso_host').'/oauth/token',
             [
                 'grant_type' => 'authorization_code',
                 'client_id' => config('auth.client_id'),
@@ -133,12 +133,6 @@ class Httpclients
 
     // ─── Backward Compatibility Aliases ──────────────────────────────
 
-    /** @deprecated ใช้ getAccessToken() แทน */
-    public function getaccess_token(): string
-    {
-        return $this->getAccessToken();
-    }
-
     /** @deprecated ใช้ getUserInfo() แทน */
     public function user_info_sso(string $accessToken): Response
     {
@@ -149,18 +143,6 @@ class Httpclients
     public function chkuser(array $data, string $signature): Response
     {
         return $this->checkUser($data, $signature);
-    }
-
-    /** @deprecated ใช้ getUser() แทน */
-    public function getuser(array $data, string $signature): Response
-    {
-        return $this->getUser($data, $signature);
-    }
-
-    /** @deprecated ใช้ addUser() แทน */
-    public function adduser(array $data, string $signature): Response
-    {
-        return $this->addUser($data, $signature);
     }
 
     // ─── Private ─────────────────────────────────────────────────────
@@ -175,7 +157,7 @@ class Httpclients
             'Authorization' => "Bearer {$this->getAccessToken()}",
             'Signature' => $signature,
         ])->post(
-            config('services.sso_master_server.sso_host') . $endpoint,
+            config('services.sso_master_server.sso_host').$endpoint,
             $data,
         );
     }

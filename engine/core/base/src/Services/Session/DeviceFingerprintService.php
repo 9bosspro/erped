@@ -91,29 +91,29 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
 
         $components = [
             // ── Browser (parsed) ─────────────────────────────────────────
-            'browser'         => $this->browser() ?? '',
-            'browser_type'    => $this->clientType() ?? '',
+            'browser' => $this->browser() ?? '',
+            'browser_type' => $this->clientType() ?? '',
             'browser_ver_maj' => explode('.', $this->browserVersion() ?? '')[0],
             // ── OS / Device ───────────────────────────────────────────────
-            'os'              => $this->os() ?? '',
-            'os_ver_major'    => explode('.', $this->osVersion() ?? '')[0],
-            'device'          => $this->device() ?? '',
-            'brand'           => $this->brand() ?? '',
-            'model'           => $this->model() ?? '',
+            'os' => $this->os() ?? '',
+            'os_ver_major' => explode('.', $this->osVersion() ?? '')[0],
+            'device' => $this->device(),
+            'brand' => $this->brand() ?? '',
+            'model' => $this->model() ?? '',
             // ── Language / Encoding (normalized) ─────────────────────────
-            'lang'            => $this->normalizeLang($request->header('Accept-Language', '')),
-            'accept_enc'      => $request->header('Accept-Encoding', ''),
+            'lang' => $this->normalizeLang((string) $request->header('Accept-Language', '')),
+            'accept_enc' => (string) $request->header('Accept-Encoding', ''),
             // ── Client Hints — stable signals ────────────────────────────
-            'ch_brands'       => implode(',', $brandNames),
-            'ch_platform'     => $id['ch_platform'] ?? '',
-            'ch_mobile'       => ($id['ch_mobile'] ?? false) ? '1' : '0',
-            'ch_arch'         => $id['ch_arch'] ?? '',
-            'ch_bitness'      => $id['ch_bitness'] ?? '',
-            'ch_model'        => $id['ch_model'] ?? '',
-            'ch_wow64'        => ($id['ch_wow64'] ?? false) ? '1' : '0',
-            'ch_form'         => implode(',', $id['ch_form_factors'] ?? []),
+            'ch_brands' => implode(',', $brandNames),
+            'ch_platform' => $id['ch_platform'] ?? '',
+            'ch_mobile' => ($id['ch_mobile'] ?? false) ? '1' : '0',
+            'ch_arch' => $id['ch_arch'] ?? '',
+            'ch_bitness' => $id['ch_bitness'] ?? '',
+            'ch_model' => $id['ch_model'] ?? '',
+            'ch_wow64' => ($id['ch_wow64'] ?? false) ? '1' : '0',
+            'ch_form' => implode(',', $id['ch_form_factors'] ?? []),
             // ── Native App identity ───────────────────────────────────────
-            'app_id'          => $id['ch_app'] ?? '',
+            'app_id' => $id['ch_app'] ?? '',
         ];
 
         $payload = json_encode($components, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
@@ -140,12 +140,12 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      */
     public function fromRequest(Request $request): static
     {
-        $ua             = $request->userAgent() ?? '';
-        $chPlatform     = $request->header('Sec-CH-UA-Platform', '');
-        $chBrands       = $request->header('Sec-CH-UA', '');
+        $ua = $request->userAgent() ?? '';
+        $chPlatform = $request->header('Sec-CH-UA-Platform', '');
+        $chBrands = $request->header('Sec-CH-UA', '');
 
         // Cache key ครอบคลุม UA + Client Hints ป้องกัน false cache hit
-        $cacheKey = $ua . '|' . $chPlatform . '|' . $chBrands;
+        $cacheKey = $ua.'|'.$chPlatform.'|'.$chBrands;
 
         if ($this->parsed && isset($this->detector) && $this->buildCacheKey() === $cacheKey) {
             return $this;
@@ -158,37 +158,37 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $clientHints = ClientHints::factory($request->server->all());
 
         $this->detector = new DeviceDetector($ua, $clientHints);
-        $this->detector->setCache(new LaravelCache());
+        $this->detector->setCache(new LaravelCache);
         $this->detector->parse();
 
         $this->parsedClient = $this->detector->getClient() ?? [];
-        $this->parsedOs     = $this->detector->getOs() ?? [];
+        $this->parsedOs = $this->detector->getOs() ?? [];
 
         $this->parsedIdentity = [
             // ── Cache key (ใช้ตรวจ invalidation) ───────────────────
-            '_cache_key'       => $cacheKey,
+            '_cache_key' => $cacheKey,
             // ── Device ──────────────────────────────────────────────
-            'is_mobile'        => $this->detector->isMobile(),
-            'is_desktop'       => $this->detector->isDesktop(),
-            'is_touch'         => $this->detector->isTouchEnabled(),
-            'is_bot'           => $this->detector->isBot(),
+            'is_mobile' => $this->detector->isMobile(),
+            'is_desktop' => $this->detector->isDesktop(),
+            'is_touch' => $this->detector->isTouchEnabled(),
+            'is_bot' => $this->detector->isBot(),
             // ── Client Hints (high-entropy) ─────────────────────────
-            'ch_model'         => $clientHints->getModel(),
-            'ch_platform'      => $clientHints->getOperatingSystem(),
-            'ch_platform_ver'  => $clientHints->getOperatingSystemVersion(),
-            'ch_arch'          => $clientHints->getArchitecture(),
-            'ch_bitness'       => $clientHints->getBitness(),
-            'ch_mobile'        => $clientHints->isMobile(),
-            'ch_brand_list'    => $clientHints->getBrandList(),
-            'ch_browser_ver'   => $clientHints->getBrandVersion(),
-            'ch_form_factors'  => $clientHints->getFormFactors(),
-            'ch_app'           => $clientHints->getApp(),
-            'ch_wow64'         => $request->header('Sec-CH-UA-WoW64') === '?1',
+            'ch_model' => $clientHints->getModel(),
+            'ch_platform' => $clientHints->getOperatingSystem(),
+            'ch_platform_ver' => $clientHints->getOperatingSystemVersion(),
+            'ch_arch' => $clientHints->getArchitecture(),
+            'ch_bitness' => $clientHints->getBitness(),
+            'ch_mobile' => $clientHints->isMobile(),
+            'ch_brand_list' => $clientHints->getBrandList(),
+            'ch_browser_ver' => $clientHints->getBrandVersion(),
+            'ch_form_factors' => $clientHints->getFormFactors(),
+            'ch_app' => $clientHints->getApp(),
+            'ch_wow64' => $request->header('Sec-CH-UA-WoW64') === '?1',
             // ── Network identity ────────────────────────────────────
-            'ip'               => $request->ip(),
-            'via'              => $request->header('Via', ''),
-            'dnt'              => $request->header('DNT', ''),
-            'connection'       => $request->header('Connection', ''),
+            'ip' => $request->ip(),
+            'via' => $request->header('Via', ''),
+            'dnt' => $request->header('DNT', ''),
+            'connection' => $request->header('Connection', ''),
         ];
 
         $this->parsed = true;
@@ -288,19 +288,19 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      * ไม่มีปัญหา UA spoofing
      *
      * @return array{source: string, name: string|null, version: string|null}
-     *   source: 'client_hints' | 'user_agent' | 'unknown'
+     *                                                                        source: 'client_hints' | 'user_agent' | 'unknown'
      */
     public function osResolved(): array
     {
         $this->ensureParsed();
 
         $chPlatform = $this->parsedIdentity['ch_platform'] ?? '';
-        $chVersion  = $this->parsedIdentity['ch_platform_ver'] ?? '';
+        $chVersion = $this->parsedIdentity['ch_platform_ver'] ?? '';
 
         if ($chPlatform !== '') {
             return [
-                'source'  => 'client_hints',
-                'name'    => $chPlatform,
+                'source' => 'client_hints',
+                'name' => $chPlatform,
                 'version' => $chVersion !== '' ? $chVersion : ($this->parsedOs['version'] ?? null),
             ];
         }
@@ -308,8 +308,8 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $uaOs = $this->parsedOs['name'] ?? null;
         if (! empty($uaOs)) {
             return [
-                'source'  => 'user_agent',
-                'name'    => $uaOs,
+                'source' => 'user_agent',
+                'name' => $uaOs,
                 'version' => $this->parsedOs['version'] ?? null,
             ];
         }
@@ -439,46 +439,46 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      */
     public function analyze(Request $request): array
     {
-        $fp          = $this->fingerprint($request);
+        $fp = $this->fingerprint($request);
         $riskSignals = $this->detectRiskSignals($request);
-        $id          = $this->parsedIdentity;
+        $id = $this->parsedIdentity;
 
         return [
-            'fingerprint'     => $fp,
+            'fingerprint' => $fp,
             // ── Bot ─────────────────────────────────────────────────
-            'is_bot'          => $id['is_bot'],
-            'bot_info'        => $id['is_bot'] ? $this->detector->getBot() : null,
+            'is_bot' => $id['is_bot'],
+            'bot_info' => $id['is_bot'] ? $this->detector->getBot() : null,
             // ── Browser / Client ────────────────────────────────────
-            'browser'         => $this->parsedClient['name'] ?? null,
-            'browser_ver'     => $this->parsedClient['version'] ?? null,
-            'browser_type'    => $this->parsedClient['type'] ?? null,
-            'brand_list'      => $id['ch_brand_list'] ?? [],
-            'app_id'          => $id['ch_app'] ?? '',
+            'browser' => $this->parsedClient['name'] ?? null,
+            'browser_ver' => $this->parsedClient['version'] ?? null,
+            'browser_type' => $this->parsedClient['type'] ?? null,
+            'brand_list' => $id['ch_brand_list'] ?? [],
+            'app_id' => $id['ch_app'] ?? '',
             // ── OS ──────────────────────────────────────────────────
-            'os'              => $this->parsedOs['name'] ?? null,
-            'os_ver'          => $this->parsedOs['version'] ?? null,
-            'os_resolved'     => $this->osResolved(),
-            'ch_platform'     => $id['ch_platform'] ?? null,
+            'os' => $this->parsedOs['name'] ?? null,
+            'os_ver' => $this->parsedOs['version'] ?? null,
+            'os_resolved' => $this->osResolved(),
+            'ch_platform' => $id['ch_platform'] ?? null,
             'ch_platform_ver' => $id['ch_platform_ver'] ?? null,
             // ── Device ──────────────────────────────────────────────
-            'device_type'     => $this->detector->getDeviceName(),
-            'device_brand'    => $this->detector->getBrandName() ?: null,
-            'device_model'    => $this->detector->getModel() ?: null,
-            'ch_model'        => $id['ch_model'] ?? null,
-            'is_mobile'       => $id['is_mobile'],
-            'is_desktop'      => $id['is_desktop'],
-            'is_touch'        => $id['is_touch'],
-            'form_factors'    => $id['ch_form_factors'] ?? [],
+            'device_type' => $this->detector->getDeviceName(),
+            'device_brand' => $this->detector->getBrandName() ?: null,
+            'device_model' => $this->detector->getModel() ?: null,
+            'ch_model' => $id['ch_model'] ?? null,
+            'is_mobile' => $id['is_mobile'],
+            'is_desktop' => $id['is_desktop'],
+            'is_touch' => $id['is_touch'],
+            'form_factors' => $id['ch_form_factors'] ?? [],
             // ── Hardware ────────────────────────────────────────────
-            'ch_arch'         => $id['ch_arch'] ?? null,
-            'ch_bitness'      => $id['ch_bitness'] ?? null,
+            'ch_arch' => $id['ch_arch'] ?? null,
+            'ch_bitness' => $id['ch_bitness'] ?? null,
             // ── Network ─────────────────────────────────────────────
-            'ip'              => $request->ip(),
-            'via'             => $id['via'] ?? null,
-            'dnt'             => $id['dnt'] ?? null,
+            'ip' => $request->ip(),
+            'via' => $id['via'] ?? null,
+            'dnt' => $id['dnt'] ?? null,
             // ── Risk ────────────────────────────────────────────────
-            'risk_signals'    => $riskSignals,
-            'risk_score'      => $this->calculateScore($riskSignals),
+            'risk_signals' => $riskSignals,
+            'risk_score' => $this->calculateScore($riskSignals),
         ];
     }
 
@@ -504,7 +504,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $isBot = $this->parsedIdentity['is_bot'];
 
         if ($isBot) {
-            $botName   = $this->detector->getBot()['name'] ?? 'unknown bot';
+            $botName = $this->detector->getBot()['name'] ?? 'unknown bot';
             $signals[] = ['type' => 'bot_detected', 'level' => 'high', 'detail' => $botName];
         }
 
@@ -515,10 +515,10 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         }
 
         // HTTP library แทน browser จริง
-        if ($this->parsedClient['type'] ?? null === 'library') {
+        if (($this->clientType() ?? '') === 'library') {
             $signals[] = [
-                'type'   => 'http_library',
-                'level'  => 'high',
+                'type' => 'http_library',
+                'level' => 'high',
                 'detail' => $this->parsedClient['name'] ?? 'unknown',
             ];
         }
@@ -526,8 +526,8 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         // Feed reader / media player แทน browser
         if (in_array($this->parsedClient['type'] ?? null, ['feed reader', 'mediaplayer', 'pim'], true)) {
             $signals[] = [
-                'type'   => 'unusual_client_type',
-                'level'  => 'medium',
+                'type' => 'unusual_client_type',
+                'level' => 'medium',
                 'detail' => $this->parsedClient['type'],
             ];
         }
@@ -535,9 +535,9 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         // Browser เก่ามาก (ไม่รวม headless — ตรวจแยกด้วย level=high ด้านล่าง)
         if (isset($this->parsedClient['name']) && $this->isOutdatedBrowser()) {
             $signals[] = [
-                'type'   => 'outdated_browser',
-                'level'  => 'medium',
-                'detail' => ($this->parsedClient['name'] ?? '') . ' ' . ($this->parsedClient['version'] ?? ''),
+                'type' => 'outdated_browser',
+                'level' => 'medium',
+                'detail' => ($this->parsedClient['name'] ?? '').' '.($this->parsedClient['version'] ?? ''),
             ];
         }
 
@@ -545,7 +545,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $forwardedFor = $request->header('X-Forwarded-For');
         if ($forwardedFor !== null) {
             $hopCount = count(array_filter(array_map('trim', explode(',', $forwardedFor))));
-            $maxHops  = (int) config('services.fingerprint.max_proxy_hops', 3);
+            $maxHops = (int) config('services.fingerprint.max_proxy_hops', 3);
 
             if ($hopCount > $maxHops) {
                 $signals[] = ['type' => 'excessive_proxy_hops', 'level' => 'medium', 'detail' => "hops: {$hopCount}"];
@@ -557,15 +557,15 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         if ($ua !== '' && preg_match('/HeadlessChrome|Headless|PhantomJS|Selenium|WebDriver|playwright/i', $ua)) {
             // ตัด UA ให้ไม่เกิน 200 chars ป้องกัน log injection / oversized payload
             $signals[] = [
-                'type'   => 'headless_browser',
-                'level'  => 'high',
+                'type' => 'headless_browser',
+                'level' => 'high',
                 'detail' => mb_substr($ua, 0, 200),
             ];
         }
 
         // Accept header ไม่สอดคล้องกับ browser ที่ declare
         $clientType = $this->parsedClient['type'] ?? null;
-        $accept     = $request->header('Accept', '');
+        $accept = $request->header('Accept', '');
         if (in_array($clientType, ['browser', null], true) && $ua !== '' && $accept === '') {
             $signals[] = ['type' => 'missing_accept_header', 'level' => 'medium'];
         }
@@ -584,14 +584,14 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      */
     protected function isOutdatedBrowser(): bool
     {
-        $version      = $this->parsedClient['version'] ?? '0';
+        $version = $this->parsedClient['version'] ?? '0';
         $majorVersion = (int) explode('.', $version)[0];
 
         $thresholds = config('services.fingerprint.browser_thresholds', [
-            'chrome'  => 120,
+            'chrome' => 120,
             'firefox' => 115,
-            'safari'  => 17,
-            'edge'    => 120,
+            'safari' => 17,
+            'edge' => 120,
         ]);
 
         $browserName = strtolower($this->parsedClient['name'] ?? '');
@@ -612,7 +612,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      */
     protected function calculateScore(array $signals): int
     {
-        $weights  = config('services.fingerprint.risk_weights', ['high' => 30, 'medium' => 15, 'low' => 5]);
+        $weights = config('services.fingerprint.risk_weights', ['high' => 30, 'medium' => 15, 'low' => 5]);
         $maxScore = (int) config('services.fingerprint.max_risk_score', 100);
 
         $score = 0;
@@ -632,7 +632,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
     private function normalizeLang(string $raw): string
     {
         preg_match_all('/([a-zA-Z]{2,3})(?:-[a-zA-Z0-9]+)*(?:;q=[\d.]+)?/', $raw, $matches);
-        $langs = array_unique(array_map('strtolower', $matches[1] ?? []));
+        $langs = array_unique(array_map('strtolower', $matches[1]));
 
         return implode(',', array_slice($langs, 0, 3));
     }

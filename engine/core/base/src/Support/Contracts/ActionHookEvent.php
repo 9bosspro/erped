@@ -75,11 +75,11 @@ abstract class ActionHookEvent
      *
      * รองรับ multiple callbacks ต่อ priority เดียวกัน
      *
-     * @param  array<string>|string  $hook      ชื่อ hook หรือ array ของ hook
+     * @param  array<string>|string  $hook  ชื่อ hook หรือ array ของ hook
      * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
-     * @param  int  $priority   ลำดับ (น้อย = รันก่อน, default 10)
+     * @param  int  $priority  ลำดับ (น้อย = รันก่อน, default 10)
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (min 1)
-     * @param  bool  $once      true = รันครั้งเดียวแล้วลบออกอัตโนมัติ
+     * @param  bool  $once  true = รันครั้งเดียวแล้วลบออกอัตโนมัติ
      * @param  string|null  $scope  จำกัด scope เช่น 'admin', 'api', 'web'
      *
      * @throws InvalidArgumentException ถ้า hook ว่างเปล่า
@@ -97,11 +97,11 @@ abstract class ActionHookEvent
         }
 
         $listenerData = [
-            'id'        => Uuid::uuid7()->toString(),
-            'callback'  => $this->resolveCallback($callback),
+            'id' => Uuid::uuid7()->toString(),
+            'callback' => $this->resolveCallback($callback),
             'arguments' => max(1, $arguments),
-            'once'      => $once,
-            'scope'     => $scope,
+            'once' => $once,
+            'scope' => $scope,
         ];
 
         foreach ((array) $hook as $hookName) {
@@ -119,9 +119,9 @@ abstract class ActionHookEvent
      *
      * Shortcut ของ addListener(..., once: true)
      *
-     * @param  array<string>|string  $hook      ชื่อ hook หรือ array ของ hook
+     * @param  array<string>|string  $hook  ชื่อ hook หรือ array ของ hook
      * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
-     * @param  int  $priority   ลำดับ (default 10)
+     * @param  int  $priority  ลำดับ (default 10)
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (min 1)
      * @param  string|null  $scope  จำกัด scope
      *
@@ -146,9 +146,9 @@ abstract class ActionHookEvent
     public function removeListener(string|array|null $hook = null, ?string $id = null): static
     {
         if ($hook === null) {
-            $this->listeners    = [];
+            $this->listeners = [];
             $this->listenerCache = [];
-            $this->cacheDirty   = false;
+            $this->cacheDirty = false;
 
             return $this;
         }
@@ -187,7 +187,7 @@ abstract class ActionHookEvent
     /**
      * ตรวจสอบว่า hook มี listeners หรือไม่
      *
-     * @param  string|null  $hook   null = ตรวจสอบว่ามี listener อยู่เลยไหม (ทุก hook)
+     * @param  string|null  $hook  null = ตรวจสอบว่ามี listener อยู่เลยไหม (ทุก hook)
      * @param  string|null  $scope  กรอง scope (null = ไม่กรอง)
      */
     public function hasListeners(?string $hook = null, ?string $scope = null): bool
@@ -217,7 +217,7 @@ abstract class ActionHookEvent
     /**
      * คืน listeners สำหรับ hook ที่ระบุ พร้อมกรอง scope ถ้าระบุ
      *
-     * @param  string  $hook        ชื่อ hook
+     * @param  string  $hook  ชื่อ hook
      * @param  string|null  $scope  กรอง scope (null = คืนทั้งหมด)
      * @return list<array<string, mixed>>
      */
@@ -242,7 +242,7 @@ abstract class ActionHookEvent
     /**
      * นับจำนวน listeners
      *
-     * @param  string|null  $hook   null = นับทั้งหมดทุก hook
+     * @param  string|null  $hook  null = นับทั้งหมดทุก hook
      * @param  string|null  $scope  กรอง scope (null = ไม่กรอง)
      */
     public function getListenerCount(?string $hook = null, ?string $scope = null): int
@@ -289,7 +289,7 @@ abstract class ActionHookEvent
      * ลบ listener ออกหลังรัน (ใช้ภายในสำหรับ once=true)
      *
      * @param  string  $hook  ชื่อ hook
-     * @param  string  $id    UUID ของ listener
+     * @param  string  $id  UUID ของ listener
      */
     protected function removeOnceListener(string $hook, string $id): void
     {

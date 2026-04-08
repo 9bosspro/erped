@@ -100,7 +100,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * ระบบล่มสมบูรณ์ — ต้องปลุกทีม on-call ทันที
      *
-     * @param  string                $message  ข้อความ log
+     * @param  string  $message  ข้อความ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function emergency(string $message, array $context = []): void
@@ -111,7 +111,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * ต้องแก้ไขด่วน — เช่น DB เต็ม, disk หมด, external service ล้มเหลว
      *
-     * @param  string                $message  ข้อความ log
+     * @param  string  $message  ข้อความ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function alert(string $message, array $context = []): void
@@ -122,7 +122,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * Component สำคัญล้มเหลว — เช่น payment gateway, authentication service
      *
-     * @param  string                $message  ข้อความ log
+     * @param  string  $message  ข้อความ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function critical(string $message, array $context = []): void
@@ -133,7 +133,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * Runtime error — ต้องสอบสวนและแก้ไข
      *
-     * @param  string                $message  ข้อความ log
+     * @param  string  $message  ข้อความ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function error(string $message, array $context = []): void
@@ -144,7 +144,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * เหตุการณ์ผิดปกติที่ไม่ใช่ error — ควรตรวจสอบ
      *
-     * @param  string                $message  ข้อความ log
+     * @param  string  $message  ข้อความ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function warning(string $message, array $context = []): void
@@ -155,7 +155,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * เหตุการณ์สำคัญที่ควรบันทึก — ไม่ใช่ error แต่น่าสังเกต
      *
-     * @param  string                $message  ข้อความ log
+     * @param  string  $message  ข้อความ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function notice(string $message, array $context = []): void
@@ -166,7 +166,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * Informational log ทั่วไป — เช่น user action, business event
      *
-     * @param  string                $message  ข้อความ log
+     * @param  string  $message  ข้อความ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function info(string $message, array $context = []): void
@@ -177,7 +177,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * Debug/diagnostic log — ใช้ใน development, ปิดใน production
      *
-     * @param  string                $message  ข้อความ log
+     * @param  string  $message  ข้อความ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function debug(string $message, array $context = []): void
@@ -198,8 +198,8 @@ final class AppLogger implements AppLoggerInterface
      *  - previous exception (ถ้ามี)
      *  - context ที่ส่งมา + auto-enrichment
      *
-     * @param  Throwable             $e        Exception ที่ต้องการ log
-     * @param  string                $message  ข้อความเพิ่มเติม (optional)
+     * @param  Throwable  $e  Exception ที่ต้องการ log
+     * @param  string  $message  ข้อความเพิ่มเติม (optional)
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function exception(Throwable $e, string $message = '', array $context = []): void
@@ -216,8 +216,8 @@ final class AppLogger implements AppLoggerInterface
     /**
      * Log exception ระดับ error — backward compatible alias ของ exception()
      *
-     * @param  Throwable             $throwable  Exception ที่ต้องการ log
-     * @param  array<string, mixed>  $context    ข้อมูลเพิ่มเติม
+     * @param  Throwable  $throwable  Exception ที่ต้องการ log
+     * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function logError(Throwable $throwable, array $context = []): void
     {
@@ -233,7 +233,7 @@ final class AppLogger implements AppLoggerInterface
      *
      * ตัวอย่าง: 'rate_limit_exceeded', 'brute_force_detected', 'csrf_mismatch'
      *
-     * @param  string                $event    ชื่อ security event
+     * @param  string  $event  ชื่อ security event
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function security(string $event, array $context = []): void
@@ -249,14 +249,14 @@ final class AppLogger implements AppLoggerInterface
      *
      * ควรเรียกทุกครั้งหลัง Auth::attempt() — สำหรับ brute force detection
      *
-     * @param  string                $identifier  email หรือ username ที่ใช้ login
-     * @param  bool                  $success     true = login สำเร็จ
-     * @param  array<string, mixed>  $context     ข้อมูลเพิ่มเติม (เช่น guard, provider)
+     * @param  string  $identifier  email หรือ username ที่ใช้ login
+     * @param  bool  $success  true = login สำเร็จ
+     * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม (เช่น guard, provider)
      */
     public function loginAttempt(string $identifier, bool $success, array $context = []): void
     {
-        $event   = $success ? 'login_success' : 'login_failed';
-        $level   = $success ? 'info' : 'warning';
+        $event = $success ? 'login_success' : 'login_failed';
+        $level = $success ? 'info' : 'warning';
         $message = $success
             ? "[SECURITY] Login สำเร็จ: {$identifier}"
             : "[SECURITY] Login ล้มเหลว: {$identifier}";
@@ -270,7 +270,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * Log unauthorized access attempt → channel 'security'
      *
-     * @param  string                $action   action ที่ถูกปฏิเสธ (เช่น 'delete_user', 'view_report')
+     * @param  string  $action  action ที่ถูกปฏิเสธ (เช่น 'delete_user', 'view_report')
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function unauthorized(string $action = '', array $context = []): void
@@ -290,8 +290,8 @@ final class AppLogger implements AppLoggerInterface
      *
      * ตัวอย่าง: SQL injection attempt, XSS payload detected, unusual data pattern
      *
-     * @param  string                $description  คำอธิบายพฤติกรรม
-     * @param  array<string, mixed>  $context      ข้อมูลเพิ่มเติม
+     * @param  string  $description  คำอธิบายพฤติกรรม
+     * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function suspiciousActivity(string $description, array $context = []): void
     {
@@ -317,8 +317,8 @@ final class AppLogger implements AppLoggerInterface
      * $logger->audit('export', 'Report', [], ['format' => 'pdf', 'rows' => 1500]);
      * ```
      *
-     * @param  string                $action   action ที่เกิดขึ้น (create, update, delete, export, ฯลฯ)
-     * @param  string                $subject  สิ่งที่ถูก action (เช่น 'User', 'Order#42')
+     * @param  string  $action  action ที่เกิดขึ้น (create, update, delete, export, ฯลฯ)
+     * @param  string  $subject  สิ่งที่ถูก action (เช่น 'User', 'Order#42')
      * @param  array<string, mixed>  $changes  ค่าที่เปลี่ยน ['field' => ['old' => x, 'new' => y]]
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
@@ -334,9 +334,9 @@ final class AppLogger implements AppLoggerInterface
 
         $this->auditChannel()->info($message, $this->buildContext(array_merge(
             [
-                'audit_action'  => $action,
+                'audit_action' => $action,
                 'audit_subject' => $subject,
-                'changes'       => $this->mask($changes),
+                'changes' => $this->mask($changes),
             ],
             $context,
         )));
@@ -345,7 +345,7 @@ final class AppLogger implements AppLoggerInterface
     /**
      * Log user access พร้อม auth context → backward compatible
      *
-     * @param  string                $text     ข้อความที่ต้องการ log
+     * @param  string  $text  ข้อความที่ต้องการ log
      * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม
      */
     public function logUserAccess(string $text = '', array $context = []): void
@@ -366,9 +366,9 @@ final class AppLogger implements AppLoggerInterface
      * ⚠️ หลีกเลี่ยงการส่ง raw SQL ที่มี user input โดยตรง
      *    ใช้ query string ที่มี placeholder แทน (เช่น "select * from users where id = ?")
      *
-     * @param  string                $sql         SQL query string
-     * @param  float                 $durationMs  ระยะเวลาที่ใช้ (มิลลิวินาที)
-     * @param  array<string, mixed>  $context     ข้อมูลเพิ่มเติม (เช่น bindings, connection)
+     * @param  string  $sql  SQL query string
+     * @param  float  $durationMs  ระยะเวลาที่ใช้ (มิลลิวินาที)
+     * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม (เช่น bindings, connection)
      */
     public function slowQuery(string $sql, float $durationMs, array $context = []): void
     {
@@ -384,10 +384,10 @@ final class AppLogger implements AppLoggerInterface
     /**
      * Log slow HTTP request → channel 'performance'
      *
-     * @param  string                $url         URL ที่ใช้เวลานาน
-     * @param  string                $method      HTTP method (GET, POST, ฯลฯ)
-     * @param  float                 $durationMs  ระยะเวลาที่ใช้ (มิลลิวินาที)
-     * @param  array<string, mixed>  $context     ข้อมูลเพิ่มเติม (เช่น status_code, memory_mb)
+     * @param  string  $url  URL ที่ใช้เวลานาน
+     * @param  string  $method  HTTP method (GET, POST, ฯลฯ)
+     * @param  float  $durationMs  ระยะเวลาที่ใช้ (มิลลิวินาที)
+     * @param  array<string, mixed>  $context  ข้อมูลเพิ่มเติม (เช่น status_code, memory_mb)
      */
     public function slowRequest(
         string $url,
@@ -420,11 +420,11 @@ final class AppLogger implements AppLoggerInterface
      * ```
      *
      * @param  array<string, mixed>  $context  Context ที่ต้องการ merge
-     * @return static  Instance ใหม่ที่มี default context
+     * @return static Instance ใหม่ที่มี default context
      */
     public function withContext(array $context): static
     {
-        $clone                 = clone $this;
+        $clone = clone $this;
         $clone->defaultContext = array_merge($this->defaultContext, $context);
 
         return $clone;
@@ -463,7 +463,7 @@ final class AppLogger implements AppLoggerInterface
      * ```
      *
      * @param  array<string, mixed>  $data  ข้อมูลที่ต้องการ mask
-     * @return array<string, mixed>  ข้อมูลที่ mask แล้ว
+     * @return array<string, mixed> ข้อมูลที่ mask แล้ว
      */
     public function mask(array $data): array
     {
@@ -515,9 +515,9 @@ final class AppLogger implements AppLoggerInterface
             $req = request();
 
             return array_filter([
-                'ip'         => $req->ip(),
-                'method'     => $req->method(),
-                'url'        => $req->fullUrl(),
+                'ip' => $req->ip(),
+                'method' => $req->method(),
+                'url' => $req->fullUrl(),
                 'request_id' => $req->header('X-Request-ID', '') ?: null,
                 'user_agent' => $req->userAgent() ?: null,
             ]);
@@ -543,8 +543,8 @@ final class AppLogger implements AppLoggerInterface
             $user = Auth::user();
 
             return array_filter([
-                'auth_user_id'    => $user->id ?? null,
-                'auth_user_name'  => $user->name ?? null,
+                'auth_user_id' => $user->id ?? null,
+                'auth_user_name' => $user->name ?? null,
                 'auth_user_email' => $user->email ?? null,
             ]);
         } catch (Throwable) {
@@ -564,29 +564,29 @@ final class AppLogger implements AppLoggerInterface
         $frames = array_slice($e->getTrace(), 0, 10);
 
         $trace = array_map(fn (array $frame): array => [
-            'file'     => $frame['file'] ?? '[internal]',
-            'line'     => $frame['line'] ?? 0,
-            'function' => ($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? ''),
+            'file' => $frame['file'] ?? '[internal]',
+            'line' => $frame['line'] ?? 0,
+            'function' => ($frame['class'] ?? '').($frame['type'] ?? '').($frame['function'] ?? ''),
         ], $frames);
 
         $data = [
             'exception' => [
-                'class'   => $e::class,
+                'class' => $e::class,
                 'message' => $e->getMessage(),
-                'code'    => $e->getCode(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-                'trace'   => $trace,
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $trace,
             ],
         ];
 
         if ($prev = $e->getPrevious()) {
             $data['exception']['caused_by'] = [
-                'class'   => $prev::class,
+                'class' => $prev::class,
                 'message' => $prev->getMessage(),
-                'code'    => $prev->getCode(),
-                'file'    => $prev->getFile(),
-                'line'    => $prev->getLine(),
+                'code' => $prev->getCode(),
+                'file' => $prev->getFile(),
+                'line' => $prev->getLine(),
             ];
         }
 

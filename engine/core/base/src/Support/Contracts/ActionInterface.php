@@ -29,11 +29,11 @@ interface ActionInterface
     /**
      * ลงทะเบียน callback สำหรับ hook(s)
      *
-     * @param  array<string>|string  $hook      ชื่อ hook หรือ array ของ hook
+     * @param  array<string>|string  $hook  ชื่อ hook หรือ array ของ hook
      * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
-     * @param  int  $priority   ลำดับ (น้อย = รันก่อน, default 10)
+     * @param  int  $priority  ลำดับ (น้อย = รันก่อน, default 10)
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (min 1)
-     * @param  bool  $once      true = รันครั้งเดียวแล้วลบออกอัตโนมัติ
+     * @param  bool  $once  true = รันครั้งเดียวแล้วลบออกอัตโนมัติ
      * @param  string|null  $scope  จำกัด scope เช่น 'admin', 'api', 'web'
      */
     public function addListener(
@@ -48,9 +48,9 @@ interface ActionInterface
     /**
      * ลงทะเบียน callback แบบ one-shot (รันครั้งเดียวแล้วลบอัตโนมัติ)
      *
-     * @param  array<string>|string  $hook      ชื่อ hook หรือ array ของ hook
+     * @param  array<string>|string  $hook  ชื่อ hook หรือ array ของ hook
      * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
-     * @param  int  $priority   ลำดับ (default 10)
+     * @param  int  $priority  ลำดับ (default 10)
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (min 1)
      * @param  string|null  $scope  จำกัด scope
      */
@@ -73,7 +73,7 @@ interface ActionInterface
     /**
      * ตรวจสอบว่า hook มี listeners หรือไม่
      *
-     * @param  string|null  $hook   null = ตรวจสอบทุก hook
+     * @param  string|null  $hook  null = ตรวจสอบทุก hook
      * @param  string|null  $scope  กรอง scope
      */
     public function hasListeners(?string $hook = null, ?string $scope = null): bool;
@@ -81,7 +81,7 @@ interface ActionInterface
     /**
      * คืน listeners สำหรับ hook ที่ระบุ
      *
-     * @param  string  $hook        ชื่อ hook
+     * @param  string  $hook  ชื่อ hook
      * @param  string|null  $scope  กรอง scope (null = ทั้งหมด)
      * @return list<array<string, mixed>>
      */
@@ -90,7 +90,7 @@ interface ActionInterface
     /**
      * นับจำนวน listeners
      *
-     * @param  string|null  $hook   null = นับทั้งหมดทุก hook
+     * @param  string|null  $hook  null = นับทั้งหมดทุก hook
      * @param  string|null  $scope  กรอง scope
      */
     public function getListenerCount(?string $hook = null, ?string $scope = null): int;
@@ -100,7 +100,7 @@ interface ActionInterface
      *
      * ไม่มีค่า return — เป็น pure side effects เท่านั้น
      *
-     * @param  string  $hook        ชื่อ hook
+     * @param  string  $hook  ชื่อ hook
      * @param  array<mixed>  $args  arguments ที่ส่งให้แต่ละ callback
      * @param  string|null  $scope  จำกัด scope (null = ทั้งหมด)
      */

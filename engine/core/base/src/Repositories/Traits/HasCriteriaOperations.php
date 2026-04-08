@@ -6,6 +6,7 @@ namespace Core\Base\Repositories\Traits;
 
 use Core\Base\Repositories\Contracts\CriteriaContract;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Trait HasCriteriaOperations — Criteria Pattern สำหรับ reusable query conditions

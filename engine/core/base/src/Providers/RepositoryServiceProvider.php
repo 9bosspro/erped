@@ -12,6 +12,7 @@ use Core\Base\Repositories\Files\StorageDiskRepository;
 use Core\Base\Repositories\Files\StorageFileRepository;
 use Core\Base\Repositories\User\UserInterface;
 use Core\Base\Repositories\User\UserRepository;
+use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -28,7 +29,7 @@ use Illuminate\Support\ServiceProvider;
  *  ไม่ต้อง override method ใดๆ
  * ────────────────────────────────────────────────────────────────────
  */
-class RepositoryServiceProvider extends ServiceProvider
+class RepositoryServiceProvider extends ServiceProvider implements DeferrableProvider
 {
     /**
      * Interface → Implementation bindings

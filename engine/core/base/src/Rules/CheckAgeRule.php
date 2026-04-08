@@ -27,6 +27,8 @@ class CheckAgeRule implements Rule
         if ($value < 30) {
             return true;
         }
+
+        return false;
     }
 
     /**

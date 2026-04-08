@@ -160,6 +160,7 @@ abstract class BaseRepository implements BaseRepositoryInterface
         $query = $this->model->newQuery();
 
         // Apply criteria แล้ว reset — decouple จาก trait ด้วย property_exists
+        /** @phpstan-ignore-next-line */
         if (property_exists($this, 'criteria') && ! empty($this->criteria)) {
             foreach ($this->criteria as $criterion) {
                 $query = $criterion->apply($query);

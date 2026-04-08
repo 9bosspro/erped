@@ -122,12 +122,12 @@ class DatatablesService
     ): void {
         $columnOrder = $options['column_order'] ?? [];
 
-        if (! empty($orderParams) && is_array($orderParams)) {
+        if (! empty($orderParams)) {
             $colIndex = (int) ($orderParams[0]['column'] ?? 0);
             $dir = strtolower($orderParams[0]['dir'] ?? 'asc');
             $dir = in_array($dir, ['asc', 'desc'], true) ? $dir : 'asc';
 
-            if (isset($columnOrder[$colIndex]) && $columnOrder[$colIndex] !== null) {
+            if (isset($columnOrder[$colIndex])) {
                 $query->orderBy($columnOrder[$colIndex], $dir);
             }
         } elseif (! empty($options['order'])) {

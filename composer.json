@@ -9,21 +9,22 @@
     ],
     "license": "MIT",
     "require": {
-        "php": "^8.4",
-        "inertiajs/inertia-laravel": "^2.0",
+        "php": "^8.3",
+        "inertiajs/inertia-laravel": "^3.0",
         "laravel/fortify": "^1.30",
-        "laravel/framework": "^12.0",
+        "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^2.10.1",
+        "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.9",
+        "matomo/device-detector": "^6.5",
         "nwidart/laravel-modules": "^13.0",
         "predis/predis": "^3.4"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "laravel/boost": "^1.8",
-        "laravel/pail": "^1.2.2",
-        "laravel/pint": "^1.24",
+        "laravel/boost": "^2.4",
+        "laravel/pail": "^1.2.6",
+        "laravel/pint": "^1.29",
         "laravel/sail": "^1.41",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
@@ -35,7 +36,10 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
-        }
+        },
+        "files": [
+            "engine/helpers/AppHelper.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
@@ -87,6 +91,17 @@
     "extra": {
         "laravel": {
             "dont-discover": []
+        },
+        "merge-plugin": {
+            "include": [
+                "engine/core/composer.json",
+                "engine/slave/composer.json",
+                "engine/modules/*/composer.json"
+            ],
+            "merge-dev": true,
+            "merge-extra": true,
+            "merge-extra-deep": true,
+            "merge-scripts": true
         }
     },
     "config": {

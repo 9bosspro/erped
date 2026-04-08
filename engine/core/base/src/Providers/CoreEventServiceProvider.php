@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace Core\Base\Providers;
 
-use Core\Base\Events\Storage\ChunkedUploadCompleted;
 // User Events
-use Core\Base\Events\Storage\FileUploadCompleted;
-// Storage Events
 use Core\Base\Events\User\UserRegistrationCompleted;
-use Core\Base\Listeners\Storage\LogUploadActivity;
 // User Listeners
+use Core\Base\Listeners\Storage\LogUploadActivity;
 use Core\Base\Listeners\Storage\NotifyUploadComplete;
-use Core\Base\Listeners\User\LogRegistrationActivity;
 // Storage Listeners
+use Core\Base\Listeners\User\LogRegistrationActivity;
 use Core\Base\Listeners\User\SendWelcomeEmail;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider;
 
@@ -32,15 +29,6 @@ class CoreEventServiceProvider extends EventServiceProvider
         UserRegistrationCompleted::class => [
             SendWelcomeEmail::class,
         ],
-
-        // File Upload Events
-        FileUploadCompleted::class => [
-            // Add listeners as needed
-        ],
-
-        ChunkedUploadCompleted::class => [
-            // Add listeners as needed
-        ],
     ];
 
     /**
@@ -56,14 +44,6 @@ class CoreEventServiceProvider extends EventServiceProvider
         LogUploadActivity::class,
         NotifyUploadComplete::class,
     ];
-
-    /**
-     * Register any events for your application.
-     */
-    public function boot(): void
-    {
-        parent::boot();
-    }
 
     /**
      * Determine if events and listeners should be automatically discovered.

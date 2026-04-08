@@ -100,7 +100,7 @@ final class ModuleHelper implements ModuleHelperInterface
 {
     /**
      * @var array<string, ModuleInstance|null>
-     * per-instance resolution cache — ป้องกัน resolve ซ้ำใน request เดียวกัน
+     *                                         per-instance resolution cache — ป้องกัน resolve ซ้ำใน request เดียวกัน
      */
     private array $resolveCache = [];
 
@@ -112,7 +112,7 @@ final class ModuleHelper implements ModuleHelperInterface
      * หา module instance ตามชื่อ
      *
      * @param  string  $name  ชื่อ module (case-sensitive, เช่น 'Demo', 'Auth')
-     * @return ModuleInstance|null  module instance หรือ null ถ้าไม่พบ
+     * @return ModuleInstance|null module instance หรือ null ถ้าไม่พบ
      */
     public function find(string $name): ?ModuleInstance
     {
@@ -123,7 +123,7 @@ final class ModuleHelper implements ModuleHelperInterface
      * หา module instance หรือ throw exception ถ้าไม่พบ
      *
      * @param  string  $name  ชื่อ module
-     * @return ModuleInstance  module instance
+     * @return ModuleInstance module instance
      *
      * @throws InvalidArgumentException ถ้า module ไม่มีอยู่
      */
@@ -141,7 +141,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืน modules ทั้งหมด (enabled และ disabled)
      *
-     * @return array<string, ModuleInstance>  keyed by module name
+     * @return array<string, ModuleInstance> keyed by module name
      */
     public function all(): array
     {
@@ -189,7 +189,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืนชื่อ module ทั้งหมดเป็น array
      *
-     * @return string[]  เช่น ['Auth', 'Demo', 'User']
+     * @return string[] เช่น ['Auth', 'Demo', 'User']
      */
     public function names(): array
     {
@@ -275,7 +275,7 @@ final class ModuleHelper implements ModuleHelperInterface
      * $helper->path('Demo', 'app/Http/Controllers')// .../Demo/app/Http/Controllers
      * ```
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน module (optional)
      *
      * @throws InvalidArgumentException ถ้า module ไม่มีอยู่
@@ -290,7 +290,7 @@ final class ModuleHelper implements ModuleHelperInterface
      *
      * ตัวอย่าง: $helper->appPath('Demo', 'Http/Controllers')
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน app/
      */
     public function appPath(string $name, string $subPath = ''): string
@@ -301,7 +301,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืน path ของ config/ directory ภายใน module
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน config/
      */
     public function configPath(string $name, string $subPath = ''): string
@@ -312,7 +312,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืน path ของ resources/views/ directory ภายใน module
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน resources/views/
      */
     public function viewsPath(string $name, string $subPath = ''): string
@@ -323,7 +323,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืน path ของ lang/ directory ภายใน module
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน lang/
      */
     public function langPath(string $name, string $subPath = ''): string
@@ -334,7 +334,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืน path ของ routes/ directory ภายใน module
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน routes/
      */
     public function routesPath(string $name, string $subPath = ''): string
@@ -345,7 +345,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืน path ของ database/ directory ภายใน module
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน database/ (เช่น 'migrations', 'seeders')
      */
     public function databasePath(string $name, string $subPath = ''): string
@@ -356,7 +356,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืน path ของ resources/assets/ directory ภายใน module
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน resources/assets/
      */
     public function assetPath(string $name, string $subPath = ''): string
@@ -367,7 +367,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืน path ของ tests/ directory ภายใน module
      *
-     * @param  string  $name     ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  $subPath  sub-path ภายใน tests/
      */
     public function testsPath(string $name, string $subPath = ''): string
@@ -390,7 +390,7 @@ final class ModuleHelper implements ModuleHelperInterface
      * ⚠️ backtrace มี overhead — ใน HTTP context ควรใช้ fromRoute() โดยตรง
      *    backtrace เหมาะสำหรับ console, queue, หรือ non-HTTP context
      *
-     * @return ModuleInstance|null  module ปัจจุบัน หรือ null ถ้าตรวจไม่ได้
+     * @return ModuleInstance|null module ปัจจุบัน หรือ null ถ้าตรวจไม่ได้
      */
     public function current(): ?ModuleInstance
     {
@@ -430,7 +430,7 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * คืนชื่อ module ปัจจุบัน หรือ null ถ้าตรวจไม่ได้
      *
-     * @return string|null  เช่น 'Demo', 'Auth', null
+     * @return string|null เช่น 'Demo', 'Auth', null
      */
     public function currentName(): ?string
     {
@@ -446,8 +446,6 @@ final class ModuleHelper implements ModuleHelperInterface
      *  3. URI first segment → /demo/users → 'demo'
      *
      * Cache: ผล cached ตลอด request (route ไม่เปลี่ยนใน request เดียวกัน)
-     *
-     * @return ModuleInstance|null
      */
     public function fromRoute(): ?ModuleInstance
     {
@@ -494,7 +492,7 @@ final class ModuleHelper implements ModuleHelperInterface
         }
 
         // 3. ตรวจจาก URI first segment (/demo/users → 'demo')
-        $uri         = $route->uri();
+        $uri = $route->uri();
         $firstSegment = explode('/', ltrim($uri, '/'))[0] ?? '';
 
         if ($firstSegment !== '') {
@@ -516,11 +514,10 @@ final class ModuleHelper implements ModuleHelperInterface
      *  fromClass('App\Services\SomeService')                           → null
      *
      * @param  string  $className  FQCN ของ class
-     * @return ModuleInstance|null
      */
     public function fromClass(string $className): ?ModuleInstance
     {
-        $cacheKey = 'class:' . $className;
+        $cacheKey = 'class:'.$className;
 
         if (array_key_exists($cacheKey, $this->resolveCache)) {
             return $this->resolveCache[$cacheKey];
@@ -537,19 +534,18 @@ final class ModuleHelper implements ModuleHelperInterface
      *  fromNamespace('Engine\Modules\Demo\Http\Controllers\Ctrl')    → Demo module
      *
      * @param  string  $namespace  namespace หรือ FQCN
-     * @return ModuleInstance|null
      */
     public function fromNamespace(string $namespace): ?ModuleInstance
     {
         $modulesNs = $this->getModulesNamespace();
-        $prefix    = $modulesNs . '\\';
+        $prefix = $modulesNs.'\\';
 
         if (! str_starts_with($namespace, $prefix)) {
             return null;
         }
 
         // ดึงชื่อ module segment ถัดจาก prefix
-        $remainder  = substr($namespace, strlen($prefix));
+        $remainder = substr($namespace, strlen($prefix));
         $moduleName = explode('\\', $remainder)[0] ?? null;
 
         if ($moduleName === null || $moduleName === '') {
@@ -567,23 +563,22 @@ final class ModuleHelper implements ModuleHelperInterface
      *  → Demo module
      *
      * @param  string  $filePath  absolute หรือ relative file path
-     * @return ModuleInstance|null
      */
     public function fromPath(string $filePath): ?ModuleInstance
     {
-        $cacheKey = 'path:' . $filePath;
+        $cacheKey = 'path:'.$filePath;
 
         if (array_key_exists($cacheKey, $this->resolveCache)) {
             return $this->resolveCache[$cacheKey];
         }
 
         $realPath = realpath($filePath) ?: $filePath;
-        $ds       = DIRECTORY_SEPARATOR;
+        $ds = DIRECTORY_SEPARATOR;
 
         foreach ($this->all() as $module) {
             $modulePath = realpath($module->getPath()) ?: $module->getPath();
             // ต้องขึ้นต้นด้วย module path + directory separator
-            if (str_starts_with($realPath, $modulePath . $ds)) {
+            if (str_starts_with($realPath, $modulePath.$ds)) {
                 return $this->resolveCache[$cacheKey] = $module;
             }
         }
@@ -608,14 +603,14 @@ final class ModuleHelper implements ModuleHelperInterface
     {
         $module = $this->findOrFail($name);
 
-        return $this->getModulesNamespace() . '\\' . $module->getStudlyName();
+        return $this->getModulesNamespace().'\\'.$module->getStudlyName();
     }
 
     /**
      * คืน version ของ module จาก module.json
      *
      * @param  string  $name  ชื่อ module
-     * @return string|null  version string หรือ null ถ้าไม่ได้กำหนด
+     * @return string|null version string หรือ null ถ้าไม่ได้กำหนด
      *
      * @throws InvalidArgumentException ถ้า module ไม่มีอยู่
      */
@@ -628,7 +623,7 @@ final class ModuleHelper implements ModuleHelperInterface
      * คืน description ของ module จาก module.json
      *
      * @param  string  $name  ชื่อ module
-     * @return string|null  description หรือ null ถ้าไม่ได้กำหนด
+     * @return string|null description หรือ null ถ้าไม่ได้กำหนด
      *
      * @throws InvalidArgumentException ถ้า module ไม่มีอยู่
      */
@@ -643,8 +638,8 @@ final class ModuleHelper implements ModuleHelperInterface
      * ตัวอย่าง: composerAttr('Demo', 'require') → ['php' => '^8.1', ...]
      *
      * @param  string  $name  ชื่อ module
-     * @param  string  $key   attribute key ใน composer.json
-     * @param  mixed   $default ค่า default ถ้าไม่พบ
+     * @param  string  $key  attribute key ใน composer.json
+     * @param  mixed  $default  ค่า default ถ้าไม่พบ
      *
      * @throws InvalidArgumentException ถ้า module ไม่มีอยู่
      */
@@ -683,7 +678,6 @@ final class ModuleHelper implements ModuleHelperInterface
      * ```
      *
      * @param  callable(ModuleInstance, string): mixed  $callback
-     * @return array
      */
     public function map(callable $callback): array
     {
@@ -791,12 +785,12 @@ final class ModuleHelper implements ModuleHelperInterface
     /**
      * สร้าง path ภายใน module โดย join segments
      *
-     * @param  string  $name      ชื่อ module
+     * @param  string  $name  ชื่อ module
      * @param  string  ...$parts  path segments (กรอง empty string ออก)
      */
     private function buildPath(string $name, string ...$parts): string
     {
-        $base     = $this->findOrFail($name)->getPath();
+        $base = $this->findOrFail($name)->getPath();
         $segments = array_filter($parts, fn (string $p): bool => $p !== '');
 
         if ($segments === []) {
@@ -809,7 +803,7 @@ final class ModuleHelper implements ModuleHelperInterface
             $segments,
         );
 
-        return $base . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $normalized);
+        return $base.DIRECTORY_SEPARATOR.implode(DIRECTORY_SEPARATOR, $normalized);
     }
 
     /**

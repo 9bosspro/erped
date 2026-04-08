@@ -52,6 +52,14 @@ interface JwtHelperInterface
 
     public function validateToken(string $token): bool;
 
+    /**
+     * ตรวจ signature เท่านั้น — **ไม่ตรวจ expiry, nbf, issuer, audience**
+     *
+     * ⚠️ token หมดอายุก็ผ่าน method นี้ได้
+     * สำหรับ authentication จริง ใช้ parse() หรือ validateToken() แทน
+     */
+    public function validateSignatureOnly(string $token): bool;
+
     // ─── Token Refresh ──────────────────────────────────────────
 
     /** @return array{access_token: string, refresh_token: string, expires_in: int} */
@@ -59,21 +67,58 @@ interface JwtHelperInterface
 
     // ─── Claim Access ───────────────────────────────────────────
 
+    /**
+     * คืน payload ทั้งหมดจาก token **โดยไม่ตรวจ signature/expiry**
+     *
+     * ⚠️ ใช้เพื่อ debug / log เท่านั้น — ห้ามนำไปใช้ตัดสินใจด้าน auth/authz
+     */
     public function getPayload(string $token): ?array;
 
+    /** ดึง claim จาก validated token (ตรวจ signature + expiry) */
     public function getClaim(string $token, string $claimName): mixed;
 
+    /**
+     * ดึง claim จาก token **โดยไม่ตรวจ signature/expiry**
+     *
+     * ⚠️ ข้อมูลที่ได้อาจถูก tampered — ใช้เฉพาะกรณีที่ต้องการอ่านก่อน validate เท่านั้น
+     */
     public function getClaimUnvalidated(string $token, string $claimName): mixed;
 
+    /**
+     * ดึง user_id จาก token **โดยไม่ตรวจ signature/expiry**
+     *
+     * ⚠️ ห้ามใช้เพื่อ authenticate ผู้ใช้ — เหมาะสำหรับ refresh flow เท่านั้น
+     */
     public function getUserId(string $token): ?int;
 
+    /**
+     * ดึงประเภท token **โดยไม่ตรวจ signature/expiry**
+     *
+     * ⚠️ ค่าที่ได้อาจถูก forge — ใช้เพื่อ routing ก่อน validate เท่านั้น
+     */
     public function getTokenType(string $token): ?string;
 
+    /**
+     * ดึง JWT ID (jti) **โดยไม่ตรวจ signature/expiry**
+     *
+     * ⚠️ ใช้สำหรับ blacklist lookup เบื้องต้น — ต้อง validate token ก่อนเชื่อ jti
+     */
     public function getJti(string $token): ?string;
 
-    /** @return string[] */
+    /**
+     * ดึง scopes **โดยไม่ตรวจ signature/expiry**
+     *
+     * ⚠️ ห้ามใช้ตัดสิน permission โดยตรง — ต้อง validate token ก่อนเสมอ
+     *
+     * @return string[]
+     */
     public function getScopes(string $token): array;
 
+    /**
+     * ดึง subject (sub) **โดยไม่ตรวจ signature/expiry**
+     *
+     * ⚠️ ค่าที่ได้อาจถูก tampered — validate token ก่อนนำไปใช้งาน
+     */
     public function getSubject(string $token): ?string;
 
     public function getRegisteredClaims(string $token): array;
@@ -94,8 +139,18 @@ interface JwtHelperInterface
 
     // ─── Token Metadata ─────────────────────────────────────────
 
+    /**
+     * ตรวจว่า token หมดอายุหรือไม่ **โดยไม่ตรวจ signature**
+     *
+     * ⚠️ ใช้เพื่อ UI hint เท่านั้น — สำหรับ auth จริงใช้ parse()
+     */
     public function isExpired(string $token): bool;
 
+    /**
+     * คืนเวลาคงเหลือ (วินาที) **โดยไม่ตรวจ signature** — คืน -1 ถ้าไม่มี exp
+     *
+     * ⚠️ ค่าที่ได้อาจไม่น่าเชื่อถือถ้า token ถูก tampered
+     */
     public function getRemainingTtl(string $token): int;
 
     public function getExpirationTime(string $token): ?DateTimeImmutable;
@@ -105,8 +160,6 @@ interface JwtHelperInterface
     public function getHeader(string $token): ?array;
 
     // ─── Utility ────────────────────────────────────────────────
-
-    public function fingerprint(string $token): string;
 
     public function rawDecode(string $token): ?array;
 

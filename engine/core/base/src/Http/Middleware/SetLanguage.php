@@ -1,10 +1,10 @@
 <?php
 
-// namespace App\Http\Middleware;
+declare(strict_types=1);
 
 namespace Core\Base\Http\Middleware;
 
-// use App\Models\Setting;  // ต้องเพิ่มตางนี้
+use App\Models\Setting;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -44,7 +44,7 @@ class SetLanguage
                 $lang = $defaultLang;
                 session()->put('lang', $lang);
             }
-            
+
             app()->setLocale($lang);
         }
 

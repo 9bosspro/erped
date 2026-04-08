@@ -161,6 +161,90 @@ if (! function_exists('istheme_paths')) {
         return is_dir(theme_paths($type.'/'.$names));
     }
 }
+if (! function_exists('normalizeData')) {
+    /**
+     * Normalize mixed data to string
+     *
+     * @param  mixed  $data  Data to normalize
+     * @return string Normalized string
+     */
+    function normalizeData(mixed $data): string
+    {
+        if (is_string($data)) {
+            return $data;
+        }
+
+        if (is_numeric($data)) {
+            return (string) $data;
+        }
+
+        return canonicalize($data);
+    }
+}
+
+if (! function_exists('canonicalize')) {
+    /**
+     * Normalize mixed data to a canonical JSON string (sorted keys)
+     *
+     * @param  mixed  $data  Data to normalize
+     */
+    function canonicalize(mixed $data, bool $checkstring = false, bool $encode = true): string|array
+    {
+        if ($checkstring && is_string($data)) {
+            return $data;
+        }
+
+        if (is_object($data)) {
+            $data = (array) $data;
+        }
+
+        if (is_array($data)) {
+            ksort($data);
+
+            foreach ($data as &$item) {
+                if (is_array($item) || is_object($item)) {
+                    $item = canonicalize($item, $checkstring, false); // sort only
+                }
+            }
+            unset($item);
+        }
+
+        if ($encode) {
+            return json_encode(
+                $data,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            );
+        }
+
+        return $data;
+    }
+}
+
+if (! function_exists('deriveKey')) {
+    /**
+     * Derive a sub-key from the master key using HKDF-SHA3-256
+     *
+     * @param  string  $purpose  Context/Purpose (e.g., 'encryption', 'hashing')
+     * @param  string  $system  System identifier or salt
+     * @return string Raw binary key (32 bytes)
+     */
+    function deriveKey(string $purpose, string $system, int $length = 32): string
+    {
+        $masterKey = (string) config('core.base::security.masterkey');
+
+        if (empty($masterKey)) {
+            throw new RuntimeException('Security Master Key is not configured in core.base::security.');
+        }
+
+        return app(Core\Base\Support\Helpers\Crypto\Contracts\HashHelperInterface::class)->hkdf(
+            $masterKey,
+            $length,
+            $purpose,
+            $system,
+            'sha3-256',
+        );
+    }
+}
 
 // =========================================================================
 // Navigation Helpers
@@ -179,42 +263,6 @@ if (! function_exists('isActive')) {
     function isActive(string $data, int $segment = 2): string
     {
         return request()->segment($segment) === $data ? 'active' : '';
-    }
-}
-
-// =========================================================================
-// OAuth Key Helpers
-// =========================================================================
-
-if (! function_exists('GetPublicKey')) {
-    /**
-     * อ่าน OAuth public key จาก storage
-     *
-     * path ของ key อ่านจาก config('passport.key_path')
-     *
-     * @return false|string เนื้อหา public key หรือ false ถ้าอ่านไม่ได้
-     */
-    function GetPublicKey(): string|false
-    {
-        return file_get_contents(
-            storage_path(config('passport.key_path', '').'oauth-public.key'),
-        );
-    }
-}
-
-if (! function_exists('GetPrivateKey')) {
-    /**
-     * อ่าน OAuth private key จาก storage
-     *
-     * path ของ key อ่านจาก config('passport.key_path')
-     *
-     * @return false|string เนื้อหา private key หรือ false ถ้าอ่านไม่ได้
-     */
-    function GetPrivateKey(): string|false
-    {
-        return file_get_contents(
-            storage_path(config('passport.key_path', '').'oauth-private.key'),
-        );
     }
 }
 
@@ -268,5 +316,74 @@ if (! function_exists('get_options')) {
         return $decode
             ? json_decode($option->value ?? '', true)
             : ($option->value ?? null);
+    }
+}
+
+if (! function_exists('encodeb64')) {
+    /**
+     * Encode binary data to Base64 (Standard)
+     */
+    function encodeb64(string $rawBinary): string
+    {
+        return Core\Base\Support\Helpers\Crypto\HashHelper::encodeb64($rawBinary);
+    }
+}
+
+if (! function_exists('decodeb64')) {
+    /**
+     * Decode Base64 string to binary
+     */
+    function decodeb64(string $base64): string
+    {
+        try {
+            return Core\Base\Support\Helpers\Crypto\HashHelper::decodeb64($base64);
+        } catch (Throwable $e) {
+            return '';
+        }
+    }
+}
+
+if (! function_exists('encodeb64UrlSafe')) {
+    /**
+     * Encode binary data to Base64URL (Safe for URLs, no padding)
+     */
+    function encodeb64UrlSafe(string $rawBinary): string
+    {
+        return Core\Base\Support\Helpers\Crypto\HashHelper::encodeb64UrlSafe($rawBinary);
+    }
+}
+if (! function_exists('decodeb64UrlSafe')) {
+    /**
+     * Decode Base64URL string to binary
+     */
+    function decodeb64UrlSafe(string $base64Url): string
+    {
+        try {
+            return Core\Base\Support\Helpers\Crypto\HashHelper::decodeb64UrlSafe($base64Url);
+        } catch (Throwable $e) {
+            return '';
+        }
+    }
+}
+
+if (! function_exists('is_base64')) {
+    /**
+     * Validate if a string is valid Base64
+     */
+    function is_base64(string $string): bool
+    {
+        return Core\Base\Support\Helpers\Crypto\HashHelper::isB64($string);
+    }
+}
+
+if (! function_exists('is_json')) {
+    /**
+     * Validate if a string is a valid JSON
+     *
+     * @param  bool  $allowEmpty  Allow {}, [], null or empty string
+     */
+    function is_json(?string $value, bool $allowEmpty = false): bool
+    {
+        return Core\Base\Support\Helpers\Crypto\HashHelper::isJson($value, $allowEmpty);
     }
 }

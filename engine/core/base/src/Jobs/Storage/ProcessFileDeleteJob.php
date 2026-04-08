@@ -121,9 +121,9 @@ class ProcessFileDeleteJob implements ShouldQueue
     {
         Log::error('ProcessFileDeleteJob: permanently failed after all retries', [
             'storageFileId' => $this->storageFileId,
-            'disk'          => $this->diskName,
-            'path'          => $this->path,
-            'error'         => $exception->getMessage(),
+            'disk' => $this->diskName,
+            'path' => $this->path,
+            'error' => $exception->getMessage(),
             'action_needed' => 'Manual cleanup required — file may still exist on storage',
         ]);
     }

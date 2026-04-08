@@ -49,7 +49,7 @@ class ImgproxyService implements ImgproxyServiceInterface
         $this->endpoint = rtrim((string) config('imgproxy.endpoint', 'http://localhost:8080'), '/');
 
         $this->defaultMode = SourceUrlMode::tryFrom(
-            (string) config('imgproxy.default_source_url_mode', 'encoded')
+            (string) config('imgproxy.default_source_url_mode', 'encoded'),
         ) ?? SourceUrlMode::Encoded;
 
         $defaultExt = (string) config('imgproxy.default_output_extension', '');
@@ -61,57 +61,6 @@ class ImgproxyService implements ImgproxyServiceInterface
 
         $this->key = self::decodeHex($rawKey);
         $this->salt = self::decodeHex($rawSalt);
-    }
-
-    // =========================================================================
-    // ImgproxyServiceInterface
-    // =========================================================================
-
-    /**
-     * {@inheritDoc}
-     */
-    public function url(string $sourceUrl): ImgproxyUrlBuilder
-    {
-        if (trim($sourceUrl) === '') {
-            throw new InvalidArgumentException('Source URL must not be empty.');
-        }
-
-        return new ImgproxyUrlBuilder(
-            service: $this,
-            sourceUrl: $sourceUrl,
-            sourceMode: $this->defaultMode,
-            defaultFormat: $this->defaultFormat,
-        );
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function sign(string $path): string
-    {
-        if (! $this->isSigningEnabled()) {
-            throw new RuntimeException('Cannot sign: IMGPROXY_KEY and IMGPROXY_SALT must be configured.');
-        }
-
-        $digest = hash_hmac('sha256', $this->salt.$path, $this->key, true);
-
-        return rtrim(strtr(base64_encode($digest), '+/', '-_'), '=');
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function isSigningEnabled(): bool
-    {
-        return $this->key !== '' && $this->salt !== '';
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function getEndpoint(): string
-    {
-        return $this->endpoint;
     }
 
     // =========================================================================
@@ -195,5 +144,56 @@ class ImgproxyService implements ImgproxyServiceInterface
         }
 
         return (string) hex2bin($hex);
+    }
+
+    // =========================================================================
+    // ImgproxyServiceInterface
+    // =========================================================================
+
+    /**
+     * {@inheritDoc}
+     */
+    public function url(string $sourceUrl): ImgproxyUrlBuilder
+    {
+        if (trim($sourceUrl) === '') {
+            throw new InvalidArgumentException('Source URL must not be empty.');
+        }
+
+        return new ImgproxyUrlBuilder(
+            service: $this,
+            sourceUrl: $sourceUrl,
+            sourceMode: $this->defaultMode,
+            defaultFormat: $this->defaultFormat,
+        );
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function sign(string $path): string
+    {
+        if (! $this->isSigningEnabled()) {
+            throw new RuntimeException('Cannot sign: IMGPROXY_KEY and IMGPROXY_SALT must be configured.');
+        }
+
+        $digest = hash_hmac('sha256', $this->salt.$path, $this->key, true);
+
+        return rtrim(strtr(base64_encode($digest), '+/', '-_'), '=');
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function isSigningEnabled(): bool
+    {
+        return $this->key !== '' && $this->salt !== '';
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getEndpoint(): string
+    {
+        return $this->endpoint;
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Core\Base\Repositories\Traits;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
@@ -67,7 +68,7 @@ trait HasWriteOperations
 
         // Wrap ด้วย transaction — ถ้า record ที่ N fail จะ rollback 1 ถึง N-1
         return $this->getConnection()->transaction(
-            fn () => (new Collection($records))->map(fn ($record) => $this->create($record)),
+            fn () => collect($records)->map(fn ($record) => $this->create($record)),
         );
     }
 
@@ -128,6 +129,7 @@ trait HasWriteOperations
         $count = 0;
 
         foreach ($models as $model) {
+            /** @var Model $model */
             $this->runHooks('beforeUpdate', $payload);
 
             if ($model->update($payload)) {
@@ -191,6 +193,7 @@ trait HasWriteOperations
         $count = 0;
 
         foreach ($models as $model) {
+            /** @var Model $model */
             $result = $force ? $model->forceDelete() : $model->delete();
 
             if ($result) {

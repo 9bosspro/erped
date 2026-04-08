@@ -1,0 +1,39 @@
+{
+    "name": "core/base",
+    "description": "The EvoEngine Core based on Laravel Framework.",
+    "type": "library",
+    "keywords": [
+        "EvoEngine",
+        "EvoEngine cms",
+        "EvoEngine platform"
+    ],
+    "homepage": "https://www.ppp-online.com",
+    "license": "MIT",
+    "support": {
+        "issues": "https://botble.ticksy.com",
+        "document": "https://docs.ppp-online.com"
+    },
+    "authors": [
+        {
+            "name": "EvoEngine Technologies",
+            "email": "contact@botble.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Core\\Base\\": "base/src",
+            "Core\\Themes\\": "themes/src"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": [],
+            "providers": [
+                   "Core\\Themes\\Providers\\ThemeServiceProvider"
+            ],
+            "aliases": {}
+            }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -19,7 +19,7 @@ use Illuminate\Support\Collection as BaseCollection;
 final class SetOperator
 {
     public function __construct(
-        private readonly ArrayTransformer $transformer = new ArrayTransformer(),
+        private readonly ArrayTransformer $transformer = new ArrayTransformer,
     ) {}
 
     /**

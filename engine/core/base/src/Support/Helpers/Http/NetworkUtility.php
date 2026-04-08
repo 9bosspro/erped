@@ -146,7 +146,7 @@ final class NetworkUtility
      */
     public function extractDomain(string $url): string
     {
-        $host = parse_url($url, PHP_URL_HOST) ?? $url;
+        $host = (string) (parse_url($url, PHP_URL_HOST) ?? $url);
 
         preg_match('/[a-z0-9\-]{1,63}\.[a-z\.]{2,}$/i', $host, $matches);
 

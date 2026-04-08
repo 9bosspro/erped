@@ -7,6 +7,7 @@ use App\Events\AccountDeleted;
 use App\Events\ProfileUpdated;
 use App\Models\User;
 use App\Repositories\Contracts\UserRepositoryInterface;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -48,9 +49,13 @@ class ProfileService
                 'email' => $data->email,
             ]);
 
-            // หากมีการเปลี่ยนอีเมล ให้ทำการตั้งสถานะอีเมลเป็น Unverified
+            // หากมีการเปลี่ยนอีเมล ให้ตั้งสถานะเป็น Unverified และส่ง verification email
             if ($emailChanged) {
                 $user = $this->userRepository->markEmailAsUnverified($user);
+
+                if ($user instanceof MustVerifyEmail) {
+                    $user->sendEmailVerificationNotification();
+                }
             }
 
             // กระจาย Event แจ้งการอัปเดตไปยังระบบอื่นๆ 

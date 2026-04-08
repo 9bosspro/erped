@@ -8,98 +8,72 @@ namespace Core\Base\Support\Helpers\Crypto\Contracts;
  * HashHelperInterface — สัญญาสำหรับ Hash Helper
  *
  * ครอบคลุม:
- *  - Standard Hash (hash, hashData)
- *  - Salted Hash (hashWithSalt, verifySaltedHash)
- *  - Double-Salt Hash (hashWithDoubleSalt, verifyDoubleSalt)
- *  - HMAC Sign/Verify (hmacSign, hmacVerify)
- *  - Signature Hash (signatureHash, verifySignatureHash)
- *  - Streaming Hash (hashStream, hmacStream, hashChunked)
- *  - File Checksum (fileChecksum, verifyFileChecksum, fileHmac, verifyFileHmac)
- *  - Content Fingerprint (fingerprint)
- *  - HKDF Key Derivation (hkdf)
- *  - Utility (equals, getAvailableAlgorithms, isAlgorithmSupported, getHashLength)
+ *  - Standard Hash        (hash, verifyHash)
+ *  - Salted Hash          (hashWithSalt, verifySaltedHash)
+ *  - Double-Salt Hash     (hashWithDoubleSalt, verifyDoubleSalt)
+ *  - HMAC Sign/Verify     (hmacSign, hmacVerify)
+ *  - Streaming Hash       (hashStream, hmacStream, hashChunked)
+ *  - File Checksum        (fileChecksum, verifyFileChecksum, fileHmac, verifyFileHmac)
+ *  - Content Fingerprint  (fingerprint)
+ *  - HKDF Key Derivation  (hkdf)
+ *  - Utility              (equals, getAvailableAlgorithms, isAlgorithmSupported, getHashLength)
  */
 interface HashHelperInterface
 {
     // ─── Standard Hash ──────────────────────────────────────────
 
-    public function hash(string $data, string $algorithm = 'sha3-256', bool $binary = false): string;
+    public function hash(mixed $data, string $algorithm = 'sha3-256', bool $binary = false): string;
 
-    public function hashData(mixed $data, string $algorithm = 'sha3-256'): string;
+    public function verifyHash(mixed $data, string $hash, string $algorithm = 'sha3-256', bool $binary = false): bool;
 
     // ─── Salted Hash ────────────────────────────────────────────
 
-    public function hashWithSalt(string $data, string $algorithm = 'sha3-256'): string;
+    public function hashWithSalt(mixed $data, string $algorithm = 'sha3-256'): string;
 
-    public function verifySaltedHash(string $data, string $saltedHash, string $algorithm = 'sha3-256'): bool;
+    public function verifySaltedHash(mixed $data, string $saltedHash, string $algorithm = 'sha3-256'): bool;
 
     // ─── Double-Salt Hash ────────────────────────────────────────
 
-    public function hashWithDoubleSalt(string $input): string;
+    public function hashWithDoubleSalt(mixed $input): string;
 
-    public function verifyDoubleSalt(string $input, string $expectedHash): bool;
+    public function verifyDoubleSalt(mixed $input, string $expectedHash): bool;
 
     // ─── HMAC Sign / Verify ─────────────────────────────────────
 
     public function hmacSign(
-        string|array $data,
+        mixed $data,
         ?string $key = null,
-        string $algorithm = 'sha256',
+        string $algorithm = 'sha3-256',
         bool $binary = false,
     ): string;
 
     public function hmacVerify(
-        string|array $data,
+        mixed $data,
         string $signature,
         ?string $key = null,
-        string $algorithm = 'sha256',
-        bool $binary = false,
-    ): bool;
-
-    // ─── Signature Hash ─────────────────────────────────────────
-
-    public function signatureHash(mixed $data = '', bool $useDoubleSalt = true, string $algorithm = 'sha3-256'): string;
-
-    public function verifySignatureHash(
-        mixed $data = '',
-        string $signature = '',
-        bool $useDoubleSalt = true,
         string $algorithm = 'sha3-256',
+        bool $binary = false,
     ): bool;
 
     // ─── Streaming / Incremental ────────────────────────────────
 
     /** @param resource $stream */
-    public function hashStream($stream, string $algorithm = 'sha256', int $chunkSize = 8192): string;
+    public function hashStream($stream, string $algorithm = 'sha3-256', int $chunkSize = 8192): string;
 
     /** @param resource $stream */
-    public function hmacStream($stream, ?string $key = null, string $algorithm = 'sha256', int $chunkSize = 8192): string;
+    public function hmacStream($stream, ?string $key = null, string $algorithm = 'sha3-256', int $chunkSize = 8192): string;
 
-    public function hashChunked(iterable $chunks, string $algorithm = 'sha256'): string;
+    public function hashChunked(iterable $chunks, string $algorithm = 'sha3-256'): string;
 
     // ─── File Checksum ──────────────────────────────────────────
 
-    public function fileChecksum(string $filePath, string $algorithm = 'sha256'): string;
+    public function fileChecksum(string $filePath, string $algorithm = 'sha3-256'): string;
 
-    public function verifyFileChecksum(string $filePath, string $expectedChecksum, string $algorithm = 'sha256'): bool;
+    public function verifyFileChecksum(string $filePath, string $expectedChecksum, string $algorithm = 'sha3-256'): bool;
 
-    public function fileHmac(string $filePath, ?string $key = null, string $algorithm = 'sha256'): string;
+    public function fileHmac(string $filePath, ?string $key = null, string $algorithm = 'sha3-256'): string;
 
-    public function verifyFileHmac(string $filePath, string $expectedHmac, ?string $key = null, string $algorithm = 'sha256'): bool;
-
-    // ─── Content Fingerprint ────────────────────────────────────
-
-    public function fingerprint(mixed $data, string $algorithm = 'sha256', int $length = 0): string;
-
-    // ─── HKDF ───────────────────────────────────────────────────
-
-    public function hkdf(
-        string $inputKeyMaterial,
-        int $length = 32,
-        string $info = '',
-        string $salt = '',
-        string $algorithm = 'sha256',
-    ): string;
+    public function verifyFileHmac(string $filePath, string $expectedHmac, ?string $key = null, string $algorithm = 'sha3-256'): bool;
 
     // ─── Utility ────────────────────────────────────────────────
 
@@ -114,4 +88,14 @@ interface HashHelperInterface
     public function isAlgorithmSupported(string $algorithm): bool;
 
     public function getHashLength(string $algorithm): int;
+
+    // ─── Key Derivation ──────────────────────────────────────────
+
+    public function hkdf(
+        string $ikm,
+        int $length = 32,
+        string $info = '',
+        string $salt = '',
+        string $algorithm = 'sha3-256',
+    ): string;
 }

@@ -21,7 +21,7 @@ final class StringFormatter
     /**
      * JSON encode แบบสวยพร้อม Unicode ไม่ถูก escape
      *
-     * @param  array|string|null  $data  ข้อมูลที่ต้องการ encode
+     * @param  array<mixed>|string|null  $data  ข้อมูลที่ต้องการ encode
      * @return string JSON string
      */
     public function jsonEncodePrettify(array|string|null $data): string

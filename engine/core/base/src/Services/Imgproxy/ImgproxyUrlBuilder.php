@@ -240,11 +240,6 @@ final class ImgproxyUrlBuilder
         return $this->service->getEndpoint().$path;
     }
 
-    public function __toString(): string
-    {
-        return $this->build();
-    }
-
     // =========================================================================
     // Private
     // =========================================================================
@@ -263,5 +258,10 @@ final class ImgproxyUrlBuilder
         $extension = $format !== null ? ".{$format->value}" : '';
 
         return "/{$base64}{$extension}";
+    }
+
+    public function __toString(): string
+    {
+        return $this->build();
     }
 }

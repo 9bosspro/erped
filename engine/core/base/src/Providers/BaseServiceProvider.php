@@ -32,9 +32,15 @@ class BaseServiceProvider extends ServiceProvider
      */
     protected array $providers = [
         CoreServiceProvider::class,
+        Service\LogServiceProvider::class,
         CoreEventServiceProvider::class,
-        \Core\Master\Providers\MasterServiceProvider::class,
-        StorageServiceProvider::class,
+        RepositoryServiceProvider::class,
+        RouteServiceProvider::class,
+        Service\SecurityServiceProvider::class,
+        Service\CacheServiceProvider::class,
+        //  \Core\Master\Providers\MasterServiceProvider::class,
+        Service\StorageServiceProvider::class,
+        Service\ImgproxyServiceProvider::class,
     ];
 
     /**
@@ -64,16 +70,6 @@ class BaseServiceProvider extends ServiceProvider
     {
         $this->forceSSL();
         $this->configureIni();
-    }
-
-    /**
-     * Get the services provided by the provider.
-     *
-     * @return array<int, string>
-     */
-    public function provides(): array
-    {
-        return [];
     }
 
     /**

@@ -23,8 +23,6 @@ final class ModuleResolver
      * ตรวจหา module ปัจจุบันจาก caller context
      *
      * @deprecated ใช้ app(ModuleHelper::class)->current() แทน
-     *
-     * @return ModuleInstance|null
      */
     public static function current(): ?ModuleInstance
     {

@@ -149,7 +149,7 @@ final class StringExtractor
      * @param  string  $end  delimiter สิ้นสุด
      * @param  bool  $includeDelimiters  true = รวม delimiters ในผลลัพธ์
      * @param  int  $offset  ตำแหน่งเริ่มค้นหา (ถูกอัปเดตโดย reference)
-     * @return array<string>|null array ของ strings ที่พบ
+     * @return array<string> array ของ strings ที่พบ (คืน array ว่างถ้าไม่พบ)
      */
     public function strBetweenAll(
         string $string,
@@ -157,7 +157,7 @@ final class StringExtractor
         string $end,
         bool $includeDelimiters = false,
         int &$offset = 0,
-    ): ?array {
+    ): array {
         $strings = [];
         $length = mb_strlen($string);
 
@@ -216,7 +216,7 @@ final class StringExtractor
         $offset = $startPos + ($includeDelimiters ? 0 : $startLength);
         $result = $this->substring($string, $offset, $length);
 
-        return $result !== false ? $result : null;
+        return $result;
     }
 
     /**
@@ -247,10 +247,6 @@ final class StringExtractor
     }
 
     /** @deprecated ใช้ getBetweenWords() แทน */
-    public function getBetweenwords(string $string, string $start = '', string $end = ''): string
-    {
-        return $this->getBetweenWords($string, $start, $end);
-    }
 
     /** @deprecated ใช้ getBetweenData() แทน */
     public function get_between_data(string $string, string $start, string $end): string
@@ -265,7 +261,7 @@ final class StringExtractor
     }
 
     /** @deprecated ใช้ strBetweenAll() แทน */
-    public function str_between_alls(string $string, string $start, string $end, bool $includeDelimiters = false, int &$offset = 0): ?array
+    public function str_between_alls(string $string, string $start, string $end, bool $includeDelimiters = false, int &$offset = 0): array
     {
         return $this->strBetweenAll($string, $start, $end, $includeDelimiters, $offset);
     }

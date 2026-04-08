@@ -70,7 +70,7 @@ class LogParserService
             return "ไม่พบไฟล์ Log: {$fileName}";
         }
 
-        $lock = Cache::lock('processing_log_' . $fileName, 600);
+        $lock = Cache::lock('processing_log_'.$fileName, 600);
 
         if (! $lock->get()) {
             return 'สคริปต์กำลังทำงานอยู่ในขณะนี้ (Locked)';
@@ -78,7 +78,7 @@ class LogParserService
 
         try {
             // ตรวจพื้นที่ดิสก์
-            $freeSpace = Cache::remember('disk_free_space', 60, fn(): float|false => disk_free_space(storage_path()));
+            $freeSpace = Cache::remember('disk_free_space', 60, fn (): float|false => disk_free_space(storage_path()));
 
             if ($freeSpace !== false && $freeSpace < $this->minDiskSpaceFree) {
                 Log::emergency('LogParser stopped: Disk space is too low!');
@@ -87,7 +87,7 @@ class LogParserService
             }
 
             // อ่านต่อจาก offset เดิม
-            $cacheKey = 'log_parser_offset_' . $fileName;
+            $cacheKey = 'log_parser_offset_'.$fileName;
             $lastOffset = (int) Cache::get($cacheKey, 0);
             $fileSize = File::size($path);
 
@@ -150,7 +150,7 @@ class LogParserService
                         $batch = [];
                     }
                 } catch (Throwable $e) {
-                    Log::error('Failed to ingest log line: ' . $e->getMessage());
+                    Log::error('Failed to ingest log line: '.$e->getMessage());
                 }
             }
 

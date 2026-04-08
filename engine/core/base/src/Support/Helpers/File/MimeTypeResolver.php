@@ -17,7 +17,7 @@ final class MimeTypeResolver
     /**
      * ตาราง mapping นามสกุลไฟล์ → MIME type(s)
      *
-     * @var array<string, string|array<string>>
+     * @var array<string, array<string>|string>
      */
     public static array $mimes = [
         'hqx' => [
@@ -487,13 +487,13 @@ final class MimeTypeResolver
     {
         $extension = trim(strtolower($extension), '. ');
 
-        if (! array_key_exists($extension, static::$mimes)) {
+        if (! array_key_exists($extension, self::$mimes)) {
             return null;
         }
 
-        return is_array(static::$mimes[$extension])
-            ? static::$mimes[$extension][0]
-            : static::$mimes[$extension];
+        return is_array(self::$mimes[$extension])
+            ? self::$mimes[$extension][0]
+            : self::$mimes[$extension];
     }
 
     /**
@@ -510,13 +510,13 @@ final class MimeTypeResolver
 
         if (
             $proposedExtension !== ''
-            && array_key_exists($proposedExtension, static::$mimes)
-            && in_array($type, (array) static::$mimes[$proposedExtension], true)
+            && array_key_exists($proposedExtension, self::$mimes)
+            && in_array($type, (array) self::$mimes[$proposedExtension], true)
         ) {
             return $proposedExtension;
         }
 
-        foreach (static::$mimes as $ext => $types) {
+        foreach (self::$mimes as $ext => $types) {
             if (in_array($type, (array) $types, true)) {
                 return $ext;
             }
@@ -535,11 +535,11 @@ final class MimeTypeResolver
     {
         $extension = trim(strtolower($extension), '. ');
 
-        if (! array_key_exists($extension, static::$mimes)) {
+        if (! array_key_exists($extension, self::$mimes)) {
             return [];
         }
 
-        return (array) static::$mimes[$extension];
+        return (array) self::$mimes[$extension];
     }
 
     /**
@@ -551,7 +551,7 @@ final class MimeTypeResolver
     {
         $extension = trim(strtolower($extension), '. ');
 
-        return array_key_exists($extension, static::$mimes);
+        return array_key_exists($extension, self::$mimes);
     }
 
     /**
@@ -563,7 +563,7 @@ final class MimeTypeResolver
     {
         $type = trim(strtolower($type));
 
-        foreach (static::$mimes as $types) {
+        foreach (self::$mimes as $types) {
             if (in_array($type, (array) $types, true)) {
                 return true;
             }

@@ -114,7 +114,7 @@ final class ThaiTextProcessor
         $return = '';
 
         for ($i = $start; $i < count($array); $i++) {
-            $ascii = ord(@iconv('UTF-8', 'TIS-620', $array[$i]));
+            $ascii = ord((string) @iconv('UTF-8', 'TIS-620', $array[$i]));
 
             // สระลอยและวรรณยุกต์ไม่นับเป็นตัวอักษร — เลื่อน length ออก
             if (
@@ -148,107 +148,7 @@ final class ThaiTextProcessor
      */
     public function setBahtText(float|string $priceNumber): string
     {
-        $countDigit = [];
-        $numberSet = [];
-        $convertInteger = [];
-        $hideZero = true;
-
-        $digitText = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
-        $digitText2 = ['เอ็ด', 'ยี่', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
-
-        $priceNumber = str_replace(',', '', (string) $priceNumber);
-        $priceNumber = explode('.', $priceNumber);
-
-        // จัดการทศนิยม (ปัดเศษ 2 ตำแหน่ง)
-        if (! empty($priceNumber[1])) {
-            if (strlen($priceNumber[1]) === 1) {
-                $priceNumber[1] .= '0';
-            } elseif (strlen($priceNumber[1]) > 2) {
-                if ($priceNumber[1][2] < 5) {
-                    $priceNumber[1] = substr($priceNumber[1], 0, 2);
-                } else {
-                    $priceNumber[1] = $priceNumber[1][0].($priceNumber[1][1] + 1);
-                }
-            }
-        }
-
-        $lengthPrice = count($priceNumber);
-        for ($indexPrice = 0; $indexPrice < $lengthPrice; $indexPrice++) {
-            $countDigit[$indexPrice] = strlen($priceNumber[$indexPrice]);
-
-            if ($countDigit[$indexPrice] <= 7) {
-                $numberSet[$indexPrice][] = $priceNumber[$indexPrice];
-            } else {
-                $cntSet = ceil($countDigit[$indexPrice] / 6);
-                for ($cnt = 1; $cnt <= $cntSet; $cnt++) {
-                    if ($cnt === 1) {
-                        $start = 0;
-                        $setLen = $countDigit[$indexPrice] - ($cntSet - 1) * 6;
-                    } else {
-                        $start = $countDigit[$indexPrice] - ($cntSet + 1 - $cnt) * 6;
-                        $setLen = 6;
-                    }
-                    $numberSet[$indexPrice][] = substr($priceNumber[$indexPrice], (int) $start, (int) $setLen);
-                }
-            }
-
-            $convertInteger[$indexPrice] = '';
-            $cntSetDigit = count($numberSet[$indexPrice]);
-
-            for ($indexSet = 0; $indexSet < $cntSetDigit; $indexSet++) {
-                if ($indexSet > 0) {
-                    $convertInteger[$indexPrice] .= $digitText2[7];
-                }
-
-                $setNumber = $numberSet[$indexPrice][$indexSet];
-                $numLength = strlen($setNumber);
-                $numberText = '';
-
-                for ($indexNum = 7; $indexNum >= 2; $indexNum--) {
-                    if ($numLength >= $indexNum) {
-                        $num = (int) substr($setNumber, -$indexNum, 1);
-                        if ($num > 0) {
-                            if ($indexNum === 2 && $num === 1) {
-                                $numberText .= $digitText2[$indexNum];
-                            } elseif ($indexNum === 2 && $num === 2) {
-                                $numberText .= $digitText2[1].$digitText2[$indexNum];
-                            } else {
-                                $numberText .= $digitText[$num].$digitText2[$indexNum];
-                            }
-                        }
-                    }
-                }
-
-                if ($numLength >= 1) {
-                    $num = (int) substr($setNumber, -1, 1);
-                    if ($num > 0) {
-                        if ($num === 1 && $numLength > 1 && (int) substr($setNumber, -2, 1) > 0) {
-                            $numberText .= $digitText2[0];
-                        } else {
-                            $numberText .= $digitText[$num];
-                        }
-                    }
-                }
-
-                $convertInteger[$indexPrice] .= $numberText;
-            }
-        }
-
-        $convertText = '';
-        if (! empty($convertInteger[0]) || $hideZero !== true || empty($convertInteger[1])) {
-            if ($convertInteger[0] === '') {
-                $convertInteger[0] = $digitText[0];
-            }
-            $convertText .= $convertInteger[0].'บาท';
-        }
-
-        if (count($priceNumber) === 1 || empty($convertInteger[1])) {
-            $convertText .= 'ถ้วน';
-        } else {
-            $convertText .= $convertInteger[1].'สตางค์';
-        }
-
-        return $convertText;
+        return \Core\Base\Support\Helpers\Localization\ThaiBahtHelper::convert((float) $priceNumber);
     }
 
     // ─── Backward Compatibility Alias ────────────────────────────────

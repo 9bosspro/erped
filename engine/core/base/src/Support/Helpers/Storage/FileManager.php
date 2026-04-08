@@ -188,18 +188,33 @@ final class FileManager
             return;
         }
 
-        $contents = File::get($path);
-        $escapedKey = preg_quote($key, '/');  // ป้องกัน regex injection
-        $pattern = "/^{$escapedKey}=.*$/m";
-        $replacement = "{$key}={$delim}{$newValue}{$delim}";
-
-        if (preg_match($pattern, $contents)) {
-            $newContents = preg_replace($pattern, $replacement, $contents);
-        } else {
-            $newContents = rtrim($contents).PHP_EOL.$replacement.PHP_EOL;
+        $handle = fopen($path, 'c+');
+        if ($handle === false) {
+            throw new RuntimeException("Cannot open .env file: {$path}");
         }
 
-        File::put($path, $newContents);
+        try {
+            flock($handle, LOCK_EX);
+
+            $contents = stream_get_contents($handle);
+            $escapedKey = preg_quote($key, '/');  // ป้องกัน regex injection
+            $pattern = "/^{$escapedKey}=.*$/m";
+            $replacement = "{$key}={$delim}{$newValue}{$delim}";
+
+            if (preg_match($pattern, $contents)) {
+                $newContents = preg_replace($pattern, $replacement, $contents);
+            } else {
+                $newContents = rtrim($contents).PHP_EOL.$replacement.PHP_EOL;
+            }
+
+            ftruncate($handle, 0);
+            rewind($handle);
+            fwrite($handle, $newContents);
+            fflush($handle);
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     /**
@@ -269,7 +284,20 @@ final class FileManager
         $header = null;
 
         try {
+            // Strip UTF-8 BOM ถ้ามี (พบบ่อยในไฟล์ CSV จาก Excel)
+            $bom = fread($handle, 3);
+            if ($bom !== "\xEF\xBB\xBF") {
+                rewind($handle);
+            }
+
             while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+                // แปลง encoding จาก Windows-1252 / TIS-620 → UTF-8 ถ้าจำเป็น
+                $row = array_map(static function (string $cell): string {
+                    return mb_detect_encoding($cell, ['UTF-8', 'TIS-620', 'Windows-1252'], true) !== 'UTF-8'
+                        ? mb_convert_encoding($cell, 'UTF-8')
+                        : $cell;
+                }, $row);
+
                 if ($header === null) {
                     $header = $row;
 
@@ -292,6 +320,8 @@ final class FileManager
      *
      * @param  string  $path  absolute path ของไฟล์
      * @param  bool  $convertToArray  true = คืนเป็น array, false = คืนเป็น string
+     *
+     * @throws RuntimeException หาก JSON เสียหาย
      */
     public function readJsonFile(string $path, bool $convertToArray = true): mixed
     {
@@ -305,7 +335,19 @@ final class FileManager
             return $convertToArray ? [] : null;
         }
 
-        return $convertToArray ? json_decode($content, true) : $content;
+        if (! $convertToArray) {
+            return $content;
+        }
+
+        $result = json_decode($content, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new RuntimeException(
+                "Failed to parse JSON file [{$path}]: ".json_last_error_msg(),
+            );
+        }
+
+        return $result;
     }
 
     /**
@@ -320,9 +362,17 @@ final class FileManager
         try {
             File::ensureDirectoryExists(File::dirname($path));
 
-            $content = $json
-                ? json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).PHP_EOL
-                : (string) $data;
+            if ($json) {
+                $encoded = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+                if ($encoded === false) {
+                    throw new RuntimeException('json_encode failed: '.json_last_error_msg());
+                }
+
+                $content = $encoded.PHP_EOL;
+            } else {
+                $content = (string) $data;
+            }
 
             File::put($path, $content);
 

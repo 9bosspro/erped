@@ -46,9 +46,9 @@ interface UserInterface extends BaseRepositoryInterface
      * คืน null ถ้าไม่พบ People ที่มี citizen_id นั้น
      *
      * @param  string  $citizenId  เลขประจำตัว
-     * @return Model|null People model หรือ null
+     * @return \App\Models\People|null People model หรือ null
      */
-    public function checkPeople(string $citizenId): ?Model;
+    public function checkPeople(string $citizenId): ?\App\Models\People;
 
     // =========================================================================
     // Uniqueness Checks — ใช้ก่อนสร้าง User ใหม่

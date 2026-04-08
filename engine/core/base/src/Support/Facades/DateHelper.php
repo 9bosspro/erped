@@ -30,7 +30,7 @@ final class DateHelper
     public function __construct(
         private readonly string $dateFormat = 'Y-m-d',
     ) {
-        $this->thaiDateTime = new ThaiDateTime();
+        $this->thaiDateTime = new ThaiDateTime;
     }
 
     /**

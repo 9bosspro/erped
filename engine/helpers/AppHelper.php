@@ -27,15 +27,15 @@ use Illuminate\Support\Str; */
 // Load order matters! Check dependencies before changing.
 // StringHelper → JsonHelper → SecurityHelper → DebugHelper
 
-require_once __DIR__ . '/CommonHelper.php';     // ppp_strlen (used by JsonHelper)
-require_once __DIR__ . '/PathHelper.php';       // no dependencies
+require_once __DIR__.'/CommonHelper.php';     // ppp_strlen (used by JsonHelper)
+require_once __DIR__.'/PathHelper.php';       // no dependencies
 // require_once __DIR__ . '/DateHelper.php';      // Empty File
-require_once __DIR__ . '/JsonHelper.php';       // json_encode_th, is_jsons (used by Security, Debug)
-require_once __DIR__ . '/HashHelper.php';       //
-require_once __DIR__ . '/CryptHelper.php';      //
-require_once __DIR__ . '/JwtHelper.php';      //
-// require_once __DIR__ . '/RsalHelper.php';      // Empty File
-require_once __DIR__ . '/StringHelper.php';     // ppp_strlen (used by JsonHelper)
-require_once __DIR__ . '/ArrayHelper.php';      // no dependencies
-require_once __DIR__ . '/ThaiHelper.php';       // no dependencies
-require_once __DIR__ . '/DebugHelper.php';      // depends on JsonHelper
+require_once __DIR__.'/JsonHelper.php';       // json_encode_th, is_jsons (used by Security, Debug)
+// require_once __DIR__ . '/HashHelper.php';    // [REMOVED] → ย้ายไป Core\Base\Support\Helpers\Crypto\HashHelper
+// require_once __DIR__ . '/CryptHelper.php';   // [REMOVED] → ย้ายไป Core\Base\Support\Helpers\Crypto\SodiumHelper
+// require_once __DIR__ . '/JwtHelper.php';     // [REMOVED] → ย้ายไป Core\Base\Support\Helpers\Crypto\JwtHelper
+// require_once __DIR__ . '/RsalHelper.php';    // [REMOVED] → ย้ายไป Core\Base\Support\Helpers\Crypto\SodiumHelper
+require_once __DIR__.'/StringHelper.php';     // ppp_strlen (used by JsonHelper)
+require_once __DIR__.'/ArrayHelper.php';      // no dependencies
+require_once __DIR__.'/ThaiHelper.php';       // no dependencies
+require_once __DIR__.'/DebugHelper.php';      // depends on JsonHelper

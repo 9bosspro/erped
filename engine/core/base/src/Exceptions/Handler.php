@@ -2,12 +2,12 @@
 
 namespace Core\Base\Exceptions;
 
-// use Botble\Base\Contracts\Exceptions\IgnoringReport;
+use Botble\Base\Contracts\Exceptions\IgnoringReport;
 use Carbon\Carbon;
-// use Core\Base\Facades\EmailHandler;
-// use Core\Base\Http\Responses\BaseHttpResponse;
-// use Core\Media\Facades\RvMedia;
 use Core\Base\Facades\BaseHelper;
+use Core\Base\Facades\EmailHandler;
+use Core\Base\Http\Responses\BaseHttpResponse;
+use Core\Media\Facades\RvMedia;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -17,7 +17,7 @@ use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
-// use PhpOffice\PhpSpreadsheet\Exception as PhpSpreadsheetException;
+use PhpOffice\PhpSpreadsheet\Exception as PhpSpreadsheetException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -40,7 +40,7 @@ class Handler extends ExceptionHandler
     public function render($request, Throwable $e)
     {
         if (! app()->isDownForMaintenance() && $e instanceof HttpExceptionInterface) {
-            do_action(BASE_ACTION_SITE_ERROR, $e->getStatusCode());
+            do_action(BASE_ACTION_SITE_ERROR, (string) $e->getStatusCode());
         }
 
         if ($e instanceof ModelNotFoundException || $e instanceof MethodNotAllowedHttpException) {
@@ -49,12 +49,12 @@ class Handler extends ExceptionHandler
 
         switch (true) {
             case $e instanceof DisabledInDemoModeException:
-            case $e instanceof MethodNotAllowedHttpException:
             case $e instanceof TokenMismatchException:
                 return $this->baseHttpResponse
                     ->setError()
                     ->setCode($e->getCode())
-                    ->setMessage($e->getMessage());
+                    ->setMessage($e->getMessage())
+                    ->toResponse($request);
             case $e instanceof PostTooLargeException:
                 if (! empty($request->allFiles())) {
                     return RvMedia::responseError(
@@ -75,7 +75,8 @@ class Handler extends ExceptionHandler
                 return $this->baseHttpResponse
                     ->setError()
                     ->setCode($e->getCode())
-                    ->setMessage($message);
+                    ->setMessage($message)
+                    ->toResponse($request);
             case $e instanceof NotFoundHttpException:
                 if (setting('redirect_404_to_homepage', 0) == 1) {
                     return redirect(url('/'));
@@ -161,7 +162,7 @@ class Handler extends ExceptionHandler
 
                 $inputs = $inputs ? BaseHelper::jsonEncodePrettify($inputs) : null;
 
-                logger()->channel('slack')->critical(
+                \Illuminate\Support\Facades\Log::channel('slack')->critical(
                     str_replace(base_path(), '', $e->getMessage()).($previous ? '('.$previous.')' : null),
                     [
                         'Request URL' => $request->fullUrl(),

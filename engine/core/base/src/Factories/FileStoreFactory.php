@@ -11,12 +11,7 @@ use InvalidArgumentException;
 
 class FileStoreFactory
 {
-    /**
-     * Map ระหว่าง driver type → adapter class
-     * driver type อ่านจาก config("filesystems.disks.{disk}.driver")
-     *
-     * @var array<string, class-string<StorageDriverInterface>>
-     */
+    /** @var array<string, class-string> */
     protected static array $driverMap = [
         's3' => MinioAdapter::class,
         'local' => LocalStorageAdapter::class,

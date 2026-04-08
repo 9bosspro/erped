@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Core\Base\Services\PhpSpreadsheet;;
+namespace Core\Base\Services\PhpSpreadsheet;
 
 use PhpOffice\PhpSpreadsheet\Reader\IReadFilter;
 
@@ -43,11 +43,11 @@ final class ChunkReadFilter implements IReadFilter
      *
      * อ่าน header (แถว 1) เสมอ + แถวในช่วงที่กำหนด
      *
-     * @param  string  $columnAddress  ที่อยู่ column
-     * @param  int  $row  หมายเลขแถว
-     * @param  string  $worksheetName  ชื่อ worksheet
+     * @param  mixed  $columnAddress  ที่อยู่ column (string)
+     * @param  mixed  $row  หมายเลขแถว (int)
+     * @param  mixed  $worksheetName  ชื่อ worksheet (string)
      */
-    public function readCell(string $columnAddress, int $row, string $worksheetName = ''): bool
+    public function readCell($columnAddress, $row, $worksheetName = ''): bool
     {
         return $row === 1 || ($row >= $this->startRow && $row < $this->endRow);
     }

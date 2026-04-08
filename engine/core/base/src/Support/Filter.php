@@ -45,7 +45,7 @@ final class Filter extends ActionHookEvent implements FilterInterface
      * - จัดการ once=true listeners อัตโนมัติหลังรัน
      * - รองรับ falsy values: "", 0, false, [] ไม่ทำให้ pipeline หยุด
      *
-     * @param  string  $hook        ชื่อ filter hook เช่น 'post.content', 'price.format'
+     * @param  string  $hook  ชื่อ filter hook เช่น 'post.content', 'price.format'
      * @param  array<mixed>  $args  $args[0] = ค่าที่ต้องการ filter, ที่เหลือ = context
      * @param  string|null  $scope  จำกัด scope (null = ทั้งหมด)
      * @return mixed ค่าหลังผ่าน filter pipeline ทั้งหมด
@@ -61,7 +61,7 @@ final class Filter extends ActionHookEvent implements FilterInterface
         foreach ($this->getListeners($hook, $scope) as $listener) {
             // ส่งค่าล่าสุดเป็น $args[0] เสมอ — pipeline pattern
             // ใช้ $args[0] = $value เพื่อรักษา falsy values (0, '', false, [])
-            $args[0]    = $value;
+            $args[0] = $value;
             $parameters = array_slice($args, 0, $listener['arguments']);
 
             $value = call_user_func_array($listener['callback'], $parameters);

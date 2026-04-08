@@ -89,7 +89,7 @@ trait PathResolverTrait
         $key = 'base:'.static::class;
 
         return self::$pathCache[$key]
-            ??= dirname((new ReflectionClass(static::class))->getFileName(), 3)
+            ??= dirname((string) (new ReflectionClass(static::class))->getFileName(), 3)
             .DIRECTORY_SEPARATOR;
     }
 

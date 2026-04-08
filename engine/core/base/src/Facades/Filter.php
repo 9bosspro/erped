@@ -1,16 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Core\Base\Facades;
 
+use Closure;
+use Core\Base\Support\Filter as FilterConcrete;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static mixed fire(string $action, array $args)
- * @method static void addListener(array|string|null $hook, \Closure|array|string $callback, int $priority = 20, int $arguments = 1)
- * @method static \Botble\Base\Supports\ActionHookEvent removeListener(string $hook)
- * @method static array getListeners()
+ * Facade สำหรับ Filter Hook System
  *
- * @see \Botble\Base\Supports\Filter
+ * @method static void addListener(string|array $hook, callable|Closure|array|string $callback, int $priority = 10, int $arguments = 1, bool $once = false, string|null $scope = null)
+ * @method static void addOnceListener(string|array $hook, callable|Closure|array|string $callback, int $priority = 10, int $arguments = 1, string|null $scope = null)
+ * @method static static removeListener(string|array|null $hook = null, string|null $id = null)
+ * @method static mixed fire(string $hook, array $args = [], string|null $scope = null)
+ * @method static bool hasListeners(string|null $hook = null, string|null $scope = null)
+ * @method static array getListeners(string $hook, string|null $scope = null)
+ * @method static int getListenerCount(string|null $hook = null, string|null $scope = null)
+ *
+ * @see FilterConcrete
  */
 class Filter extends Facade
 {

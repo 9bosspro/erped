@@ -148,7 +148,7 @@ final class SodiumHelper implements SodiumHelperInterface
 
             return $hash;
         } catch (SodiumException $e) {
-            throw new RuntimeException('SipHash-2-4 hash ล้มเหลว: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('SipHash-2-4 hash ล้มเหลว: '.$e->getMessage(), 0, $e);
         }
     }
 
@@ -254,8 +254,8 @@ final class SodiumHelper implements SodiumHelperInterface
         \sodium_memzero($clientKeyPair);
         if ($isBase64) {
             if ($urlSafe) {
-                $rx = self::encodeb64url($rx);
-                $tx = self::encodeb64url($tx);
+                $rx = self::encodeb64UrlSafe($rx);
+                $tx = self::encodeb64UrlSafe($tx);
             } else {
                 $rx = self::encodeb64($rx);
                 $tx = self::encodeb64($tx);
@@ -282,8 +282,8 @@ final class SodiumHelper implements SodiumHelperInterface
         \sodium_memzero($serverKeyPair);
         if ($isBase64) {
             if ($urlSafe) {
-                $rx = self::encodeb64url($rx);
-                $tx = self::encodeb64url($tx);
+                $rx = self::encodeb64UrlSafe($rx);
+                $tx = self::encodeb64UrlSafe($tx);
             } else {
                 $rx = self::encodeb64($rx);
                 $tx = self::encodeb64($tx);
@@ -316,7 +316,7 @@ final class SodiumHelper implements SodiumHelperInterface
                 $theirPk,
             );
         } catch (SodiumException $e) {
-            throw new RuntimeException('X25519 ECDH ล้มเหลว: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('X25519 ECDH ล้มเหลว: '.$e->getMessage(), 0, $e);
         }
     }
 
@@ -353,7 +353,7 @@ final class SodiumHelper implements SodiumHelperInterface
 
             return \sodium_crypto_sign($message, $signingSecretKey);
         } catch (SodiumException $e) {
-            throw new RuntimeException('Ed25519 signCombined ล้มเหลว: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('Ed25519 signCombined ล้มเหลว: '.$e->getMessage(), 0, $e);
         }
     }
 
@@ -371,7 +371,7 @@ final class SodiumHelper implements SodiumHelperInterface
             $signingPublicKey = self::decodeb64($signingPublicKeyb64);
             $result = \sodium_crypto_sign_open($signed, $signingPublicKey);
         } catch (SodiumException $e) {
-            throw new RuntimeException('Ed25519 openSigned ล้มเหลว: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('Ed25519 openSigned ล้มเหลว: '.$e->getMessage(), 0, $e);
         }
 
         if ($result === false) {
@@ -394,7 +394,7 @@ final class SodiumHelper implements SodiumHelperInterface
         try {
             return \sodium_compare($a, $b);
         } catch (SodiumException $e) {
-            throw new RuntimeException('sodium_compare ล้มเหลว: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('sodium_compare ล้มเหลว: '.$e->getMessage(), 0, $e);
         }
     }
 
@@ -497,7 +497,7 @@ final class SodiumHelper implements SodiumHelperInterface
                 default => throw new InvalidArgumentException("AEAD algorithm ไม่รองรับ: {$algo}"),
             };
         } catch (SodiumException $e) {
-            throw new RuntimeException("AEAD ({$algo}) encrypt ล้มเหลว: " . $e->getMessage(), 0, $e);
+            throw new RuntimeException("AEAD ({$algo}) encrypt ล้มเหลว: ".$e->getMessage(), 0, $e);
         }
     }
 
@@ -544,7 +544,7 @@ final class SodiumHelper implements SodiumHelperInterface
                 default => throw new InvalidArgumentException("AEAD algorithm ไม่รองรับ: {$algo}"),
             };
         } catch (SodiumException $e) {
-            throw new RuntimeException("AEAD ({$algo}) decrypt ล้มเหลว: " . $e->getMessage(), 0, $e);
+            throw new RuntimeException("AEAD ({$algo}) decrypt ล้มเหลว: ".$e->getMessage(), 0, $e);
         }
 
         if ($result === false) {
@@ -571,19 +571,22 @@ final class SodiumHelper implements SodiumHelperInterface
     /**
      * เข้ารหัส Symmetric — คืน Base64
      */
-    public function encrypt(mixed $message, ?string $key32b64 = null, bool $returnBase64 = true): string
+    public function encrypt(mixed $message, ?string $key32b64 = null, bool $returnBase64 = true, bool $urlSafe = false): string
     {
-        return $this->secretboxEncryptInternal($message, $key32b64, $returnBase64);
+        return $this->secretboxEncryptInternal($message, $key32b64, $returnBase64, $urlSafe);
     }
 
     /**
      * ถอดรหัส Symmetric จาก Base64
      */
-    public function decrypt(string $payloadb64, ?string $key32b64 = null, bool $isBase64Input = true): mixed
+    public function decrypt(string $payloadb64, ?string $key32b64 = null, bool $isBase64Input = true, bool $urlSafe = false): mixed
     {
-        $rawkey = $this->resolveKey($key32b64, 32);
+        $rawkey = empty($key32b64) ? $this->appKey : $this->resolveKey($key32b64, 32);
+        if (empty($rawkey)) {
+            throw new InvalidArgumentException('Encryption key is not configured.');
+        }
         if ($isBase64Input) {
-            $payloadb64 = self::decodeb64($payloadb64);
+            $payloadb64 = $urlSafe ? self::decodeb64UrlSafe($payloadb64) : self::decodeb64($payloadb64);
         }
 
         /* $binary = $isBase64
@@ -628,7 +631,7 @@ final class SodiumHelper implements SodiumHelperInterface
             throw new RuntimeException('AEAD เข้ารหัสล้มเหลว');
         }
 
-        $data = self::FORMAT_AEAD_V1 . $nonce . $ciphertext;
+        $data = self::FORMAT_AEAD_V1.$nonce.$ciphertext;
 
         if ($returnBase64) {
             $data = self::encodeb64($data);
@@ -673,7 +676,7 @@ final class SodiumHelper implements SodiumHelperInterface
         // ─── Legacy format (backward compatible) ─────────────────────
         if (\strlen($decoded) < $minLenLeg) {
             throw new RuntimeException(
-                'AEAD payload เล็กเกินไป (ต้องการอย่างน้อย ' . $minLenLeg . ' bytes)',
+                'AEAD payload เล็กเกินไป (ต้องการอย่างน้อย '.$minLenLeg.' bytes)',
             );
         }
 
@@ -681,7 +684,7 @@ final class SodiumHelper implements SodiumHelperInterface
         // byte แรกที่ >= \x01 แต่ไม่ใช่ FORMAT_AEAD_V1 = version ที่ไม่รู้จัก
         if ($decoded[0] >= "\x01" && $decoded[0] !== self::FORMAT_AEAD_V1) {
             throw new RuntimeException(
-                'AEAD: ไม่รองรับ format version 0x' . bin2hex($decoded[0]),
+                'AEAD: ไม่รองรับ format version 0x'.bin2hex($decoded[0]),
             );
         }
 
@@ -1092,7 +1095,7 @@ final class SodiumHelper implements SodiumHelperInterface
         $nonce = \random_bytes(SODIUM_CRYPTO_BOX_NONCEBYTES);
         $kp = \sodium_crypto_box_keypair_from_secretkey_and_publickey($sk, $pk);
 
-        $data = $nonce . \sodium_crypto_box($message, $nonce, $kp);
+        $data = $nonce.\sodium_crypto_box($message, $nonce, $kp);
         \sodium_memzero($kp);
         \sodium_memzero($sk);
 
@@ -1106,14 +1109,17 @@ final class SodiumHelper implements SodiumHelperInterface
 
     // เข้ารหัสแบบสมมาตร  ข้อมูลจะถูกเข้ารหัสด้วยกุญแจเดียวกัน
     //  ใช้กุญแจ  Secretbox (XSalsa20-Poly1305)
-    private function secretboxEncryptInternal(string $message, ?string $keyBase64, bool $returnBase64 = true): string
+    private function secretboxEncryptInternal(string $message, ?string $keyBase64, bool $returnBase64 = true, bool $urlSafe = false): string
     {
-        $key = $this->resolveKey($keyBase64, 32);  // key 32 ไบท์
+        $key = empty($keyBase64) ? $this->appKey : $this->resolveKey($keyBase64, 32);
+        if (empty($key)) {
+            throw new InvalidArgumentException('Encryption key is not configured.');
+        }  // key 32 ไบท์
         $nonce = \random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         // format v1: VERSION(1) + nonce(24) + ciphertext+MAC
-        $data = self::FORMAT_SECRETBOX_V1 . $nonce . \sodium_crypto_secretbox($message, $nonce, $key);
+        $data = self::FORMAT_SECRETBOX_V1.$nonce.\sodium_crypto_secretbox($message, $nonce, $key);
         if ($returnBase64) {
-            return self::encodeb64($data);
+            return $urlSafe ? self::encodeb64UrlSafe($data) : self::encodeb64($data);
         }
 
         return $data;

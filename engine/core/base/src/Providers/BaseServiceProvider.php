@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Core\Base\Providers;
 
 use Core\Base\Traits\LoadAndPublishDataTrait;
-use Illuminate\Support\ServiceProvider;
 
 /**
  * BaseServiceProvider — Entry point ของ Core\Base package
@@ -32,15 +31,8 @@ class BaseServiceProvider extends ServiceProvider
      */
     protected array $providers = [
         CoreServiceProvider::class,
-        Service\LogServiceProvider::class,
         CoreEventServiceProvider::class,
-        RepositoryServiceProvider::class,
         RouteServiceProvider::class,
-        Service\SecurityServiceProvider::class,
-        Service\CacheServiceProvider::class,
-        //  \Core\Master\Providers\MasterServiceProvider::class,
-        Service\StorageServiceProvider::class,
-        Service\ImgproxyServiceProvider::class,
     ];
 
     /**

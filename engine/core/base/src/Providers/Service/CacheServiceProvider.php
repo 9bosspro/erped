@@ -51,6 +51,9 @@ class CacheServiceProvider extends ServiceProvider implements DeferrableProvider
         return [
             CacheService::class,
             'core.base.cache',
+            CacheManager::class,
+            'core.cache',
+            CacheManagerInterface::class,
         ];
     }
 }

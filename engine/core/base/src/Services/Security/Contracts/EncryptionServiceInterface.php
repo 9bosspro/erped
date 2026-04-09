@@ -27,12 +27,12 @@ interface EncryptionServiceInterface
     /**
      * เข้ารหัสข้อมูลด้วย Symmetric Key
      */
-    public function encryptWithKey(mixed $data, ?string $key32b64 = null, bool $returnBase64 = true): string;
+    public function encryptWithKey(mixed $data, ?string $key32b64 = null, bool $urlSafe = false): string;
 
     /**
      * ถอดรหัสข้อมูลด้วย Symmetric Key
      */
-    public function decryptWithKey(string $ciphertext, ?string $key32b64 = null, bool $isBase64Input = true): mixed;
+    public function decryptWithKey(string $ciphertext, ?string $key32b64 = null, bool $urlSafe = false): mixed;
 
     /**
      * เข้ารหัสข้อมูลด้วย AEAD (XChaCha20-Poly1305-IETF)

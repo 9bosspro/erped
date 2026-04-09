@@ -90,14 +90,13 @@ final class EncryptionService implements EncryptionServiceInterface
      *
      * @param  mixed  $data  ข้อมูลที่ต้องการเข้ารหัส (string หรือ mixed — auto JSON)
      * @param  string  $key32b64  Base64-encoded key ขนาด 32 bytes
-     * @param  bool  $returnBase64  ถ้าเป็น true จะเข้ารหัสผลลัพธ์เป็น Base64
      * @return string payload เข้ารหัสแล้ว
      */
-    public function encryptWithKey(mixed $data, ?string $key32b64 = null, bool $returnBase64 = true): string
+    public function encryptWithKey(mixed $data, ?string $key32b64 = null, bool $urlSafe = false): string
     {
         $plaintext = $this->normalizeData($data);
 
-        return $this->sodium->encrypt($plaintext, $key32b64, $returnBase64);
+        return $this->sodium->encrypt($plaintext, $key32b64, urlSafe: $urlSafe);
     }
 
     /**
@@ -105,12 +104,12 @@ final class EncryptionService implements EncryptionServiceInterface
      *
      * @param  string  $ciphertext  payload เข้ารหัส (Base64 หรือ Base64url)
      * @param  string  $key32b64  Base64-encoded key ขนาด 32 bytes
-     * @param  bool  $isBase64Input  ถ้าเป็น true จะถอดรหัสข้อมูลจาก Base64 ก่อน
+     * @param  bool  $urlSafe  ถ้าเป็น true ใช้ Base64url (ไม่มี +/=) แทน Base64 ปกติ
      * @return mixed ข้อมูลดั้งเดิม (string หรือ array/object ถ้าเดิมเป็น mixed)
      */
-    public function decryptWithKey(string $ciphertext, ?string $key32b64 = null, bool $isBase64Input = true): mixed
+    public function decryptWithKey(string $ciphertext, ?string $key32b64 = null, bool $urlSafe = false): mixed
     {
-        return $this->sodium->decrypt($ciphertext, $key32b64, $isBase64Input);
+        return $this->sodium->decrypt($ciphertext, $key32b64, urlSafe: $urlSafe);
     }
 
     // ─── AEAD Encryption ──────────────────────────────────────
@@ -173,6 +172,9 @@ final class EncryptionService implements EncryptionServiceInterface
     public function verify(string $signatureb64, mixed $data, string $pk): bool
     {
         $signature = $this->hashHelper->decodeb64($signatureb64);
+        if ($signature === false) {
+            return false;
+        }
 
         return $this->sodium->verify($signature, $this->normalizeData($data), $pk);
     }

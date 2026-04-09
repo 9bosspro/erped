@@ -112,7 +112,7 @@ trait ParsesEncryptionKey
      * @param  string  $base64Url  Base64url string
      * @return string raw bytes
      */
-    public static function decodeb64UrlSafe(string $base64Url): string|false
+    public static function decodeb64UrlSafe(string $base64Url): string
     {
         if (! self::isBase64UrlSafe($base64Url)) {
             throw new RuntimeException('Invalid base64url');
@@ -120,8 +120,7 @@ trait ParsesEncryptionKey
         try {
             return \sodium_base642bin($base64Url, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
         } catch (SodiumException) {
-            // throw new RuntimeException("Invalid base64url encoding");
-            return false;
+            throw new RuntimeException('Invalid base64url encoding');
         }
     }
 

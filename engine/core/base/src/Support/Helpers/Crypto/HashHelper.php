@@ -555,10 +555,16 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
         if (empty($inputKeyMaterial)) {
             throw new RuntimeException('Invalid inputKeyMaterial string.');
         }
-        // ถ้าไม่มี salt ให้ใช้ empty string (hash_hkdf รองรับ salt ว่าง)
-        $salt = $saltb64 !== '' ? (string) $this->decodeb64($saltb64) : '';
-        if (empty($salt)) {
-            throw new RuntimeException('Invalid salt string. in '.__FUNCTION__);
+        // ถ้าไม่ส่ง salt ให้ใช้ empty string (hash_hkdf รองรับ salt ว่าง)
+        // แต่ถ้าส่ง salt มาแล้ว decode ไม่ได้ → throw
+        if ($saltb64 !== '') {
+            $decoded = $this->decodeb64($saltb64);
+            if ($decoded === false || $decoded === '') {
+                throw new RuntimeException('Invalid salt string. in '.__FUNCTION__);
+            }
+            $salt = $decoded;
+        } else {
+            $salt = '';
         }
 
         // 1. ตรวจสอบความถูกต้องของ Algorithm

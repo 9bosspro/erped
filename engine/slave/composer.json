@@ -1,0 +1,38 @@
+{
+    "name": "slave",
+    "description": "The EvoEngine slave  client based on Laravel Framework.",
+    "type": "library",
+    "keywords": [
+        "EvoEngine",
+        "EvoEngine slave client",
+        "EvoEngine slave client"
+    ],
+    "homepage": "https://portal.ppp-online.com",
+    "license": "MIT",
+    "support": {
+        "issues": "https://portal.ppp-online.com",
+        "document": "https://docs.ppp-online.com"
+    },
+    "authors": [
+        {
+            "name": "EvoEngine Technologies slave client",
+            "email": "contact@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Slave\\": "src"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": [],
+            "providers": [
+                   "Slave\\Providers\\SlaveServiceProvider"
+            ],
+            "aliases": {}
+            }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

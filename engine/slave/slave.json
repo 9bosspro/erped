@@ -1,0 +1,10 @@
+{
+    "productId": "4B690EFA",
+    "source": "ppp",
+    "apiUrl": "https://ednext.ppp-online.com",
+    "apiKey": "",
+    "version": "7.5.2",
+    "marketplaceUrl": "https://ednext.ppp-online.com/",
+    "marketplaceToken": "",
+    "minimumPhpVersion": "8.2.0"
+}

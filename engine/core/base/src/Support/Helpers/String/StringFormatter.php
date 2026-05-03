@@ -43,7 +43,7 @@ final class StringFormatter
     {
         $newText = Str::title(str_replace(['_', '-'], ' ', $text));
 
-        return preg_replace('!\s+!', ' ', trim($newText));
+        return (string) preg_replace('!\s+!', ' ', trim($newText));
     }
 
     /**
@@ -54,7 +54,7 @@ final class StringFormatter
      */
     public function slugFormat(string $string): string
     {
-        $string = preg_replace('/\s+/u', '-', trim($string));
+        $string = (string) preg_replace('/\s+/u', '-', trim($string));
         $string = str_replace(['/', '\\'], '-', $string);
 
         return strtolower($string);

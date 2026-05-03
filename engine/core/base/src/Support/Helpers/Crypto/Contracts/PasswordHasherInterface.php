@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Core\Base\Support\Helpers\Crypto\Contracts;
 
+use Core\Base\Enums\ArgonLevel;
+
 /**
  * PasswordHasherInterface — สัญญาสำหรับ Password Hashing Helper
  *
@@ -21,6 +23,9 @@ interface PasswordHasherInterface
     // ─── Hashing ────────────────────────────────────────────────
 
     public function hash(string $password): string;
+
+    /** เลือก cost ผ่าน ArgonLevel enum แทนการ hardcode — คืนค่าเหมือน hash() */
+    public function hashAtLevel(string $password, ArgonLevel $level): string;
 
     public function hashBcrypt(string $password): string;
 
@@ -68,8 +73,9 @@ interface PasswordHasherInterface
 
     // ─── Legacy Support ─────────────────────────────────────────
 
-    /** @deprecated ใช้ hash() ด้วย Argon2id แทน */
+    /** @deprecated ใช้ hash() ด้วย Argon2id แทน — SHA-256 เร็วเกินไปสำหรับ password */
     public function hashWithSalt(string $password): string;
 
+    /** @deprecated ใช้ verify() แทน — สำหรับ legacy hash เท่านั้น */
     public function verifyWithSalt(string $password, string $hashWithSalt): bool;
 }

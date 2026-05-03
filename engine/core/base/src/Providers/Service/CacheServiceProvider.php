@@ -7,7 +7,6 @@ namespace Core\Base\Providers\Service;
 use Core\Base\Services\Cache\CacheService;
 use Core\Base\Support\Helpers\Cache\CacheManager;
 use Core\Base\Support\Helpers\Cache\Contracts\CacheManagerInterface;
-use Core\Base\Traits\LoadAndPublishDataTrait;
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
 
@@ -15,29 +14,26 @@ use Illuminate\Support\ServiceProvider;
  * CacheServiceProvider — ลงทะเบียน Service สำหรับ Cache
  *
  * ลงทะเบียน:
- * - CacheService — singleton สำหรับจัดการ cache กลาง
+ * - CacheService   — singleton สำหรับจัดการ cache กลาง
+ * - CacheManager   — singleton wrapper ครอบ cache driver
  *
  * ใช้ DeferrableProvider เพื่อโหลด service เฉพาะเมื่อถูกร้องขอจริงๆ
  */
 class CacheServiceProvider extends ServiceProvider implements DeferrableProvider
 {
-    //  use LoadAndPublishDataTrait;
-    protected const PACKAGE_NAME = 'ppp-base-cache';
+    protected const string PACKAGE_NAME = 'ppp-base-cache';
 
     /**
      * ลงทะเบียน services เข้า container
      */
     public function register(): void
     {
-        // $this->setNamespace('Core\Base');
         $this->app->singleton(CacheService::class);
         $this->app->alias(CacheService::class, 'core.base.cache');
-        // ── Cache ──────────────────────────────────────────────────
+
         $this->app->singleton(CacheManager::class);
         $this->app->alias(CacheManager::class, 'core.cache');
         $this->app->alias(CacheManager::class, CacheManagerInterface::class);
-        // Imgproxy
-        //  $this->app->alias(ImgproxyService::class, ImgproxyServiceInterface::class);
     }
 
     /**
@@ -52,8 +48,8 @@ class CacheServiceProvider extends ServiceProvider implements DeferrableProvider
             CacheService::class,
             'core.base.cache',
             CacheManager::class,
-            'core.cache',
             CacheManagerInterface::class,
+            'core.cache',
         ];
     }
 }

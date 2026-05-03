@@ -1,10 +1,10 @@
 {
-    "productId": "4B690EFA",
-    "source": "envato",
-    "apiUrl": "https://license.botble.com",
+    "productId": "",
+    "source": "evoengine",
+    "apiUrl": "",
     "apiKey": "",
     "version": "7.5.2",
-    "marketplaceUrl": "https://marketplace.botble.com/api/v1",
+    "marketplaceUrl": "",
     "marketplaceToken": "",
-    "minimumPhpVersion": "8.2.0"
+    "minimumPhpVersion": "8.3.0"
 }

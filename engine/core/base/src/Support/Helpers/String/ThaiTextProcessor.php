@@ -85,8 +85,8 @@ final class ThaiTextProcessor
         }
 
         $result = strtolower($result);
-        $result = preg_replace('/[^a-z0-9]+/u', '-', $result);
-        $result = preg_replace('/-+/', '-', $result);
+        $result = (string) preg_replace('/[^a-z0-9]+/u', '-', $result);
+        $result = (string) preg_replace('/-+/', '-', $result);
         $result = trim($result, '-');
 
         if ($unique) {

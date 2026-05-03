@@ -151,8 +151,8 @@ if (! function_exists('array_some')) {
     /**
      * ตรวจสอบว่ามีค่าใดค่าหนึ่งใน $needles อยู่ใน $haystack หรือไม่
      *
-     * @param  array  $needles  อาเรย์ของค่าที่ต้องการตรวจสอบ
-     * @param  array  $haystack  อาเรย์ที่ต้องการเปรียบเทียบ
+     * @param  array<mixed>  $needles  อาเรย์ของค่าที่ต้องการตรวจสอบ
+     * @param  array<mixed>  $haystack  อาเรย์ที่ต้องการเปรียบเทียบ
      * @param  bool  $strict  ใช้การเปรียบเทียบแบบ strict หรือไม่ (ค่าเริ่มต้น: false)
      * @return bool true ถ้ามีค่าใดค่าหนึ่งตรงกัน
      */
@@ -172,8 +172,8 @@ if (! function_exists('array_every')) {
     /**
      * ตรวจสอบว่าทุกค่าใน $needles อยู่ใน $haystack หรือไม่ (subset)
      *
-     * @param  array  $needles  อาเรย์ของค่าที่ต้องการตรวจสอบ
-     * @param  array  $haystack  อาเรย์ที่ต้องการเปรียบเทียบ
+     * @param  array<mixed>  $needles  อาเรย์ของค่าที่ต้องการตรวจสอบ
+     * @param  array<mixed>  $haystack  อาเรย์ที่ต้องการเปรียบเทียบ
      * @param  bool  $strict  ใช้การเปรียบเทียบแบบ strict หรือไม่ (ค่าเริ่มต้น: false)
      * @return bool true ถ้าทุกค่าตรงกัน
      */
@@ -193,10 +193,10 @@ if (! function_exists('array_missing')) {
     /**
      * คืนค่าที่ขาดหายไปจาก $haystack เมื่อเปรียบเทียบกับ $required
      *
-     * @param  array  $required  อาเรย์ของค่าที่จำเป็นต้องมี
-     * @param  array  $haystack  อาเรย์ที่ต้องการเปรียบเทียบ
+     * @param  array<mixed>  $required  อาเรย์ของค่าที่จำเป็นต้องมี
+     * @param  array<mixed>  $haystack  อาเรย์ที่ต้องการเปรียบเทียบ
      * @param  bool  $strict  ใช้การเปรียบเทียบแบบ strict หรือไม่ (ค่าเริ่มต้น: false)
-     * @return array อาเรย์ของค่าที่ขาดหายไป
+     * @return array<mixed> อาเรย์ของค่าที่ขาดหายไป
      */
     function array_missing(array $required, array $haystack, bool $strict = false): array
     {
@@ -224,6 +224,10 @@ if (! function_exists('is_asso')) {
 if (! function_exists('gen_subset_arrays')) {
     /**
      * กรองอาร์เรย์แรกให้เหลือเฉพาะสมาชิกที่มีอยู่ในอาร์เรย์ที่สอง
+     *
+     * @param  array<int|string>  $array1
+     * @param  array<int|string>  $array2
+     * @return array<int|string>
      */
     function gen_subset_arrays(array $array1, array $array2): array
     {
@@ -234,16 +238,24 @@ if (! function_exists('gen_subset_arrays')) {
 if (! function_exists('gen_union_arrays')) {
     /**
      * คืนค่า Unique Union ของอาเรย์ที่ส่งเข้ามา
+     *
+     * @param  array<int|string>  $array1
+     * @param  array<int|string>  $array2
+     * @return array<int|string>
      */
     function gen_union_arrays(array $array1, array $array2): array
     {
-        return array_values(array_unique(array_merge($array1, $array2)));
+        return array_values(array_unique([...$array1, ...$array2]));
     }
 }
 
 if (! function_exists('gen_diff_arrays')) {
     /**
      * คืนค่าที่ต่างกัน (เฉพาะใน array1)
+     *
+     * @param  array<int|string>  $array1
+     * @param  array<int|string>  $array2
+     * @return array<int|string>
      */
     function gen_diff_arrays(array $array1, array $array2): array
     {

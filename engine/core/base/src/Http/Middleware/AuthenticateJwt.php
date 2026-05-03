@@ -55,7 +55,7 @@ class AuthenticateJwt
     {
         $token = $request->bearerToken();
 
-        if (empty($token)) {
+        if ($token === null || $token === '') {
             return $this->unauthorized('กรุณาส่ง Bearer token');
         }
 
@@ -63,27 +63,32 @@ class AuthenticateJwt
         try {
             $parsed = $this->jwtService->parse($token);
         } catch (Throwable $e) {
-            Log::debug('JWT_AUTH_FAILED', ['reason' => $e->getMessage()]);
+            // warning — auth failures should be visible in production logs
+            Log::warning('JWT_AUTH_FAILED', [
+                'reason' => $e->getMessage(),
+                'ip' => $request->ip(),
+                'path' => $request->path(),
+            ]);
 
             return $this->unauthorized('Token ไม่ถูกต้องหรือหมดอายุ');
         }
 
         // 2. ตรวจ blacklist
         $jti = $parsed->claims()->get('jti');
-        if (is_string($jti) && $this->blacklist->isRevoked($jti)) {
+        if (\is_string($jti) && $this->blacklist->isRevoked($jti)) {
             return $this->unauthorized('Token ถูกเพิกถอนแล้ว');
         }
 
-        // 3. ตรวจ token type = access
+        // 3. ตรวจ token type = access (ต้องเป็น string ก่อนเปรียบเทียบ — PHPStan L9)
         $type = $parsed->claims()->get('type');
-        if ($type !== 'access') {
+        if (! \is_string($type) || $type !== 'access') {
             return $this->unauthorized('ประเภท token ไม่ถูกต้อง');
         }
 
-        // 4. ดึง user
+        // 4. ดึง user — user_id ต้องเป็น int บวก
         $userId = $parsed->claims()->get('user_id');
-        if (empty($userId)) {
-            return $this->unauthorized('Token ไม่มี user_id');
+        if (! \is_int($userId) || $userId <= 0) {
+            return $this->unauthorized('Token ไม่มี user_id ที่ถูกต้อง');
         }
 
         $user = User::find($userId);

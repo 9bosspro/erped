@@ -17,8 +17,9 @@ use Core\Base\Support\Contracts\ActionInterface;
  * ```php
  * $action->addListener('order.paid', fn(Order $order) => Log::info("Paid: {$order->id}"));
  * $action->addListener('order.paid', fn(Order $order) => Mail::send(new OrderPaidMail($order)), priority: 20);
- * $action->addOnceListener('app.boot', fn() => Cache::flush());  // รันครั้งเดียวเมื่อ boot
+ * $id = $action->addOnceListener('app.boot', fn() => Cache::flush());
  * $action->fire('order.paid', [$order]);
+ * $action->removeListener('app.boot', $id);  // ลบก่อนรันได้
  * ```
  *
  * @see ActionInterface
@@ -31,7 +32,7 @@ final class Action extends ActionHookEvent implements ActionInterface
      *
      * - ไม่มีค่า return (pure side effects)
      * - รองรับ scope filtering: null = รัน listeners ทุก scope
-     * - จัดการ once=true listeners อัตโนมัติหลังรัน
+     * - จัดการ once=true listeners อัตโนมัติหลัง loop (bulk removal)
      * - เรียงลำดับตาม priority (น้อย → มาก)
      *
      * @param  string  $hook  ชื่อ hook เช่น 'user.created', 'order.paid'
@@ -44,13 +45,22 @@ final class Action extends ActionHookEvent implements ActionInterface
             return;
         }
 
-        foreach ($this->getListeners($hook, $scope) as $listener) {
-            $parameters = array_slice($args, 0, $listener['arguments']);
-            call_user_func_array($listener['callback'], $parameters);
+        $onceIds = [];
 
-            if ($listener['once']) {
-                $this->removeOnceListener($hook, $listener['id']);
+        foreach ($this->getListeners($hook, $scope) as $listener) {
+            /** @var array<string, mixed> $listener */
+            $this->invokeListener($listener, $args);
+
+            if (! empty($listener['once'])) {
+                $id = $listener['id'] ?? '';
+                if (is_string($id) && $id !== '') {
+                    $onceIds[] = $id;
+                }
             }
+        }
+
+        foreach ($onceIds as $id) {
+            $this->removeOnceListener($hook, $id);
         }
     }
 }

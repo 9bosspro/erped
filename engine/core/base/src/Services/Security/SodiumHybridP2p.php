@@ -66,40 +66,7 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
      */
     public function __construct(?string $keypairBinary = null)
     {
-        if ($keypairBinary === null || $keypairBinary === '') {
-            parent::__construct(null);
-
-            return;
-        }
-
-        // Auto-detect: Hex (128 hex chars = 64 bytes binary)
-        if (\strlen($keypairBinary) === 128 && \ctype_xdigit($keypairBinary)) {
-            parent::__construct(\sodium_hex2bin($keypairBinary));
-
-            return;
-        }
-
-        // Auto-detect: Base64 standard (88 chars) หรือ Base64url (86 chars)
-        if (\strlen($keypairBinary) === 88 || \strlen($keypairBinary) === 86) {
-            $bin = \base64_decode($keypairBinary, strict: true);
-            if ($bin === false) {
-                throw new RuntimeException('Invalid base64 keypair string. Please provide standardized Base64.');
-            }
-            parent::__construct($bin);
-
-            return;
-        }
-
-        // Binary — ตรวจขนาดก่อนส่งต่อ
-        $expectedLen = SODIUM_CRYPTO_KX_SECRETKEYBYTES + SODIUM_CRYPTO_KX_PUBLICKEYBYTES;
-        if (\strlen($keypairBinary) !== $expectedLen) {
-            throw new RuntimeException(
-                "Invalid binary keypair length: expected {$expectedLen} bytes, got ".\strlen($keypairBinary).'. '.
-                'Make sure you provided a full X25519 KX keypair (secret + public).',
-            );
-        }
-
-        parent::__construct($keypairBinary);
+        parent::__construct($this->resolveKeypair($keypairBinary));
     }
 
     // ─────────────────────────────────────────────────────────
@@ -136,16 +103,19 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
      * BUNDLE FORMAT (v2): v2.ephem_pub_hex.nonce_hex.ciphertext_hex
      *
      * @param  string  $message  plaintext ที่ต้องการส่ง
-     * @param  string  $recipientPubKey  public key ของ host ปลายทาง (hex หรือ base64)
+     * @param  string  $recipientPubKey  public key ของ host ปลายทาง (binary, hex หรือ base64)
      * @param  string  $aad  context binding เช่น 'host-a→host-b:v2'
      * @return string bundle v2 พร้อมส่งข้ามโฮส
+     *
+     * @throws RuntimeException ถ้าการเข้ารหัสล้มเหลว
      */
     public static function encryptFor(
         string $message,
         string $recipientPubKey,
         string $aad = '',
     ): string {
-        $recipientPubBin = self::resolvePublicKeyStatic($recipientPubKey);
+        $instance = new static;
+        $recipientPubBin = $instance->resolvePublicKey($recipientPubKey);
 
         if (\strlen($recipientPubBin) !== self::PUBKEY_LEN) {
             throw new RuntimeException(
@@ -157,12 +127,16 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
         $nonce = '';
         $ciphertext = '';
 
+        // ตัวแปรสำหรับ cleanup ใน finally — ต้องประกาศก่อน try เพื่อให้ finally เข้าถึงได้
+        $ephKeypair = '';
+        $tx = '';
+        $rx = '';
+
         try {
             $ephKeypair = \sodium_crypto_kx_keypair();
             $ephPubBin = \sodium_crypto_kx_publickey($ephKeypair);
 
             [$rx, $tx] = \sodium_crypto_kx_client_session_keys($ephKeypair, $recipientPubBin);
-            \sodium_memzero($rx);
 
             $nonce = \random_bytes(self::NONCE_LEN);
 
@@ -173,11 +147,19 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
                 $nonce,
                 $tx,
             );
-
-            \sodium_memzero($tx);
-            \sodium_memzero($ephKeypair);
         } catch (SodiumException $e) {
             throw new RuntimeException('encryptFor failed: '.$e->getMessage(), 0, $e);
+        } finally {
+            // ล้าง key material ออกจากหน่วยความจำเสมอ — แม้เกิด exception
+            if ($rx !== '') {
+                \sodium_memzero($rx);
+            }
+            if ($tx !== '') {
+                \sodium_memzero($tx);
+            }
+            if ($ephKeypair !== '') {
+                \sodium_memzero($ephKeypair);
+            }
         }
 
         return \implode(self::SEP, [
@@ -240,7 +222,8 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
         string $signingSecretKeyHex,
         string $aad = '',
     ): string {
-        $recipientPubBin = self::resolvePublicKeyStatic($recipientPubKey);
+        $instance = new static;
+        $recipientPubBin = $instance->resolvePublicKey($recipientPubKey);
 
         if (\strlen($recipientPubBin) !== self::PUBKEY_LEN) {
             throw new RuntimeException(
@@ -252,19 +235,23 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
         $nonce = '';
         $ciphertext = '';
 
+        // key material ที่ต้องล้างใน finally — ประกาศก่อน try เพื่อให้ finally เข้าถึงได้
+        $signingKey = '';
+        $ephKeypair = '';
+        $rx = '';
+        $tx = '';
+
         try {
             // 1. Sign message ด้วย Ed25519 signing key
             $signingKey = \sodium_hex2bin($signingSecretKeyHex);
 
             if (\strlen($signingKey) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) {
-                \sodium_memzero($signingKey);
                 throw new InvalidArgumentException(
                     'Invalid signing key length: expected '.SODIUM_CRYPTO_SIGN_SECRETKEYBYTES.' bytes.',
                 );
             }
 
             $sig = \sodium_crypto_sign_detached($message, $signingKey);
-            \sodium_memzero($signingKey);
 
             // 2. Prepend signature: sig(64 bytes) || plaintext
             $signedPlaintext = $sig.$message;
@@ -274,20 +261,36 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
             $ephPubBin = \sodium_crypto_kx_publickey($ephKeypair);
 
             [$rx, $tx] = \sodium_crypto_kx_client_session_keys($ephKeypair, $recipientPubBin);
-            \sodium_memzero($rx);
 
             $nonce = \random_bytes(self::NONCE_LEN);
+
+            // V2S Binding: bind ephPubBin และ sender public key ใน AAD
+            // ป้องกัน Identity Misbinding Attack
+            $senderPub = \sodium_crypto_sign_publickey($signingKey);
+            $effectiveAad = $aad.$ephPubBin.$senderPub;
+
             $ciphertext = \sodium_crypto_aead_xchacha20poly1305_ietf_encrypt(
                 $signedPlaintext,
-                $aad.$ephPubBin,
+                $effectiveAad,
                 $nonce,
                 $tx,
             );
-
-            \sodium_memzero($tx);
-            \sodium_memzero($ephKeypair);
         } catch (SodiumException $e) {
             throw new RuntimeException('encryptForSigned failed: '.$e->getMessage(), 0, $e);
+        } finally {
+            // ล้าง key material ออกจากหน่วยความจำเสมอ — แม้เกิด exception
+            if ($signingKey !== '') {
+                \sodium_memzero($signingKey);
+            }
+            if ($rx !== '') {
+                \sodium_memzero($rx);
+            }
+            if ($tx !== '') {
+                \sodium_memzero($tx);
+            }
+            if ($ephKeypair !== '') {
+                \sodium_memzero($ephKeypair);
+            }
         }
 
         return \implode(self::SEP, [
@@ -333,9 +336,9 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
             $sessionKey = \sodium_crypto_aead_xchacha20poly1305_ietf_keygen();
 
             // 2. Seal session key สำหรับแต่ละผู้รับด้วย X25519 anonymous seal
-            //    KX public key (X25519) ใช้แทน box public key ได้เลย — key material เหมือนกัน
+            $instance = new static;
             foreach ($recipients as $id => $pubKey) {
-                $pubKeyBin = self::resolvePublicKeyStatic($pubKey);
+                $pubKeyBin = $instance->resolvePublicKey($pubKey);
 
                 if (\strlen($pubKeyBin) !== self::PUBKEY_LEN) {
                     throw new RuntimeException("Invalid public key length for recipient '{$id}'.");
@@ -344,6 +347,7 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
                 $sealedKeys[(string) $id] = \sodium_bin2hex(
                     \sodium_crypto_box_seal($sessionKey, $pubKeyBin),
                 );
+                \sodium_memzero($pubKeyBin);
             }
 
             // 3. เข้ารหัส message ด้วย session key (AEAD)
@@ -373,31 +377,6 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
         } catch (JsonException $e) {
             throw new RuntimeException('sealForMany JSON encode failed: '.$e->getMessage(), 0, $e);
         }
-    }
-
-    // ─────────────────────────────────────────────────────────
-    //  PRIVATE HELPERS
-    // ─────────────────────────────────────────────────────────
-
-    /**
-     * แปลง public key string → binary (static version สำหรับ encryptFor)
-     * auto-detect: hex (ctype_xdigit) หรือ base64
-     */
-    private static function resolvePublicKeyStatic(string $key): string
-    {
-        if (\ctype_xdigit($key)) {
-            return \sodium_hex2bin($key);
-        }
-
-        $bin = \base64_decode($key, strict: true);
-
-        if ($bin === false) {
-            throw new RuntimeException(
-                'Invalid public key format. Expected hex (64 chars) or base64 (44 chars).',
-            );
-        }
-
-        return $bin;
     }
 
     // ─────────────────────────────────────────────────────────
@@ -441,11 +420,11 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
             );
         }
 
-        foreach (['ephem_pub' => $ephPubHex, 'nonce' => $nonceHex, 'ciphertext' => $ciphertextHex] as $field => $hex) {
-            if (empty($hex) || ! \ctype_xdigit($hex)) {
-                throw new RuntimeException("Bundle field '{$field}' is not valid hex.");
-            }
-        }
+        $this->validateHexFields([
+            'ephem_pub' => $ephPubHex,
+            'nonce' => $nonceHex,
+            'ciphertext' => $ciphertextHex,
+        ]);
 
         $ephPubBin = \sodium_hex2bin($ephPubHex);
         $nonce = \sodium_hex2bin($nonceHex);
@@ -519,11 +498,11 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
 
         [, $ephPubHex, $nonceHex, $ciphertextHex] = $parts;
 
-        foreach (['ephem_pub' => $ephPubHex, 'nonce' => $nonceHex, 'ciphertext' => $ciphertextHex] as $field => $hex) {
-            if (empty($hex) || ! \ctype_xdigit($hex)) {
-                throw new RuntimeException("Bundle field '{$field}' is not valid hex.");
-            }
-        }
+        $this->validateHexFields([
+            'ephem_pub' => $ephPubHex,
+            'nonce' => $nonceHex,
+            'ciphertext' => $ciphertextHex,
+        ]);
 
         $ephPubBin = \sodium_hex2bin($ephPubHex);
         $nonce = \sodium_hex2bin($nonceHex);
@@ -541,23 +520,36 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
             throw new RuntimeException('Ciphertext too short.');
         }
 
+        // Decode verify key once, before decryption
+        $verifyKeyBin = \sodium_hex2bin($senderVerifyKeyHex);
+
+        if (\strlen($verifyKeyBin) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES) {
+            throw new InvalidArgumentException(
+                'Invalid verify key length: expected '.SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES.' bytes.',
+            );
+        }
+
         try {
             [$rx, $tx] = \sodium_crypto_kx_server_session_keys($this->keypair, $ephPubBin);
             \sodium_memzero($tx);
 
+            $effectiveAad = $aad.$ephPubBin.$verifyKeyBin;
+
             $signedPlaintext = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
                 $ciphertextBin,
-                $aad.$ephPubBin,
+                $effectiveAad,
                 $nonce,
                 $rx,
             );
 
             \sodium_memzero($rx);
         } catch (SodiumException $e) {
+            \sodium_memzero($verifyKeyBin);
             throw new RuntimeException('decryptMessageVerified decrypt failed: '.$e->getMessage(), 0, $e);
         }
 
         if ($signedPlaintext === false) {
+            \sodium_memzero($verifyKeyBin);
             throw new RuntimeException(
                 'Authentication failed — bundle tampered, wrong keypair, or mismatched AAD.',
             );
@@ -565,6 +557,7 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
 
         // แยก sig(64 bytes Ed25519) + plaintext
         if (\strlen($signedPlaintext) <= SODIUM_CRYPTO_SIGN_BYTES) {
+            \sodium_memzero($verifyKeyBin);
             throw new RuntimeException('Decrypted content too short — missing Ed25519 signature.');
         }
 
@@ -572,19 +565,13 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
         $message = \substr($signedPlaintext, SODIUM_CRYPTO_SIGN_BYTES);
 
         try {
-            $verifyKey = \sodium_hex2bin($senderVerifyKeyHex);
-
-            if (\strlen($verifyKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES) {
-                throw new InvalidArgumentException(
-                    'Invalid verify key length: expected '.SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES.' bytes.',
-                );
-            }
-
-            $valid = \sodium_crypto_sign_verify_detached($sig, $message, $verifyKey);
-            \sodium_memzero($verifyKey);
+            $valid = \sodium_crypto_sign_verify_detached($sig, $message, $verifyKeyBin);
         } catch (SodiumException $e) {
+            \sodium_memzero($verifyKeyBin);
             throw new RuntimeException('Ed25519 verify failed: '.$e->getMessage(), 0, $e);
         }
+
+        \sodium_memzero($verifyKeyBin);
 
         if (! $valid) {
             throw new RuntimeException(
@@ -616,32 +603,39 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
             throw new RuntimeException('Invalid envelope JSON: '.$e->getMessage(), 0, $e);
         }
 
-        if (! isset($payload['v'], $payload['r'], $payload['n'], $payload['c'])) {
+        if (! is_array($payload) || ! isset($payload['v'], $payload['r'], $payload['n'], $payload['c'])) {
             throw new RuntimeException('Invalid multi-recipient envelope structure.');
         }
 
-        if ($payload['v'] !== self::MULTI_RECIPIENT_VERSION) {
-            throw new RuntimeException('Unsupported multi-recipient version: '.$payload['v']);
+        if (! is_string($payload['v']) || $payload['v'] !== self::MULTI_RECIPIENT_VERSION) {
+            throw new RuntimeException('Unsupported multi-recipient version: '.(is_scalar($payload['v']) ? $payload['v'] : gettype($payload['v'])));
         }
 
-        if (! isset($payload['r'][$recipientId])) {
+        if (! is_array($payload['r']) || ! isset($payload['r'][$recipientId])) {
             throw new RuntimeException("Recipient '{$recipientId}' not found in envelope.");
         }
 
-        foreach (['nonce' => $payload['n'], 'ciphertext' => $payload['c']] as $field => $hex) {
-            if (empty($hex) || ! \ctype_xdigit($hex)) {
-                throw new RuntimeException("Envelope field '{$field}' is not valid hex.");
-            }
+        if (! is_string($payload['n']) || ! is_string($payload['c'])) {
+            throw new RuntimeException('Invalid payload: nonce or ciphertext is not a valid string.');
         }
+
+        $this->validateHexFields([
+            'nonce' => $payload['n'],
+            'ciphertext' => $payload['c'],
+        ]);
 
         $sessionKey = '';
 
         try {
-            $sealedKeyBin = \sodium_hex2bin($payload['r'][$recipientId]);
+            $sealedKeyHex = $payload['r'][$recipientId];
+            if (! is_string($sealedKeyHex)) {
+                throw new RuntimeException("Recipient '{$recipientId}' key is not a valid string.");
+            }
+            $sealedKeyBin = \sodium_hex2bin($sealedKeyHex);
 
             // สร้าง box keypair จาก KX keypair — X25519 key material เหมือนกันทุกประการ
-            $kxSk = \sodium_crypto_kx_secretkey($this->keypair);
-            $kxPk = \sodium_crypto_kx_publickey($this->keypair);
+            $kxSk = $this->getSecretKeyBinary();
+            $kxPk = $this->getPublicKeyBinary();
             $boxKp = \sodium_crypto_box_keypair_from_secretkey_and_publickey($kxSk, $kxPk);
             \sodium_memzero($kxSk);
 
@@ -654,8 +648,10 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
                 );
             }
 
-            $nonce = \sodium_hex2bin($payload['n']);
-            $ciphertextBin = \sodium_hex2bin($payload['c']);
+            $nonceHex = $payload['n'];
+            $cipherHex = $payload['c'];
+            $nonce = \sodium_hex2bin($nonceHex);
+            $ciphertextBin = \sodium_hex2bin($cipherHex);
 
             if (\strlen($nonce) !== self::NONCE_LEN) {
                 throw new RuntimeException('Invalid nonce length in envelope.');
@@ -683,5 +679,59 @@ class SodiumHybridP2p extends SodiumHybrid implements SodiumHybridP2pInterface
         }
 
         return $plaintext;
+    }
+
+    /**
+     * Resolve keypair from various formats (null, hex, base64, binary).
+     */
+    private function resolveKeypair(?string $keypairBinary): ?string
+    {
+        if ($keypairBinary === null || $keypairBinary === '') {
+            return null;
+        }
+
+        // Auto-detect: Hex (128 hex chars = 64 bytes binary)
+        if (\strlen($keypairBinary) === 128 && \ctype_xdigit($keypairBinary)) {
+            return \sodium_hex2bin($keypairBinary);
+        }
+
+        // Auto-detect: Base64 standard (88 chars) หรือ Base64url (86 chars)
+        if (\strlen($keypairBinary) === 88 || \strlen($keypairBinary) === 86) {
+            $bin = \base64_decode($keypairBinary, strict: true);
+            if ($bin === false) {
+                throw new RuntimeException('Invalid base64 keypair string. Please provide standardized Base64.');
+            }
+
+            return $bin;
+        }
+
+        // Binary — ตรวจขนาดก่อนส่งต่อ
+        $expectedLen = SODIUM_CRYPTO_KX_SECRETKEYBYTES + SODIUM_CRYPTO_KX_PUBLICKEYBYTES;
+        if (\strlen($keypairBinary) !== $expectedLen) {
+            throw new RuntimeException(
+                "Invalid binary keypair length: expected {$expectedLen} bytes, got ".\strlen($keypairBinary).'. '.
+                    'Make sure you provided a full X25519 KX keypair (secret + public).',
+            );
+        }
+
+        return $keypairBinary;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  PRIVATE HELPERS
+    // ─────────────────────────────────────────────────────────
+
+    /**
+     * ตรวจสอบว่าทุกส่วนของ Bundle เป็น Hex ที่ถูกต้อง
+     *
+     * @param  array<string, string>  $fields  ['fieldName' => 'hexString']
+     */
+    private function validateHexFields(array $fields): void
+    {
+        foreach ($fields as $name => $hex) {
+            if (! is_string($hex) || $hex === '' || ! \ctype_xdigit($hex)) {
+                throw new RuntimeException("Bundle field '{$name}' must be a valid hex string.");
+            }
+        }
     }
 }

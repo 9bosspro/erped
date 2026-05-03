@@ -25,7 +25,7 @@ final class StringCleaner
      */
     public function cleanNbsp(string $str): string
     {
-        return trim(preg_replace('/&nbsp;/', ' ', $str));
+        return trim((string) preg_replace('/&nbsp;/', ' ', $str));
     }
 
     /**
@@ -36,7 +36,9 @@ final class StringCleaner
      */
     public function dataReady(mixed $data): string
     {
-        return stripslashes($this->cleanNbsp((string) $data));
+        $dataStr = is_scalar($data) ? (string) $data : '';
+
+        return stripslashes($this->cleanNbsp($dataStr));
     }
 
     /**
@@ -47,7 +49,7 @@ final class StringCleaner
      */
     public function removeSpecialChars(string $value): string
     {
-        return preg_replace('/[^a-zA-Z0-9_ -]/s', '', $value);
+        return (string) preg_replace('/[^a-zA-Z0-9_ -]/s', '', $value);
     }
 
     /**
@@ -71,7 +73,7 @@ final class StringCleaner
             $badword = str_replace('\*', '\w*?', preg_quote($badword, '/'));
 
             if ($replacement !== '') {
-                $str = preg_replace(
+                $str = (string) preg_replace(
                     "/({$delim})(".$badword.")({$delim})/i",
                     "\\1{$replacement}\\3",
                     $str,
@@ -86,7 +88,7 @@ final class StringCleaner
 
                 for ($i = count($matches) - 1; $i >= 0; $i--) {
                     $length = strlen($matches[$i][0]);
-                    $str = substr_replace($str, str_repeat('#', $length), $matches[$i][1], $length);
+                    $str = (string) substr_replace($str, str_repeat('#', $length), $matches[$i][1], $length);
                 }
             }
         }
@@ -112,7 +114,7 @@ final class StringCleaner
             return '';
         }
 
-        $str = preg_replace('/[[:space:]]+/', $ch, trim($str));
+        $str = (string) preg_replace('/[[:space:]]+/', $ch, trim($str));
 
         if ($enableStrip) {
             $str = strip_tags($str);
@@ -137,7 +139,7 @@ final class StringCleaner
             return '';
         }
 
-        return preg_replace('/[^A-Za-z0-9ก-๙]/', '', trim($str));
+        return (string) preg_replace('/[^A-Za-z0-9ก-๙]/', '', trim($str));
     }
 
     /**
@@ -171,7 +173,7 @@ final class StringCleaner
             return '';
         }
 
-        $data = (string) $data;
+        $data = is_scalar($data) ? (string) $data : '';
         mb_internal_encoding('utf-8');
         $currentEncoding = mb_detect_encoding($data, 'auto');
 
@@ -179,7 +181,7 @@ final class StringCleaner
             ? mb_convert_encoding($data, $currentEncoding, 'UTF-8')
             : mb_convert_encoding($data, 'TIS-620', 'UTF-8');
 
-        return preg_replace("/(^[\r\n]*|[\r\n]+)[\s\t]*[\r\n]+/", '', str_replace('"', '', $data));
+        return (string) preg_replace("/(^[\r\n]*|[\r\n]+)[\s\t]*[\r\n]+/", '', str_replace('"', '', $data));
     }
 
     /**
@@ -191,9 +193,9 @@ final class StringCleaner
     public function cleanString(string $string): string
     {
         $string = str_replace(' ', '-', $string);
-        $string = preg_replace('/[^A-Za-z0-9\-]/', '', $string);
+        $string = (string) preg_replace('/[^A-Za-z0-9\-]/', '', $string);
 
-        return preg_replace('/-+/', '-', $string);
+        return (string) preg_replace('/-+/', '-', $string);
     }
 
     // ─── Backward Compatibility Aliases ──────────────────────────────

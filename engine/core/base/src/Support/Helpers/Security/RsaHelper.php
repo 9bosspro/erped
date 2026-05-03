@@ -44,9 +44,13 @@ class RsaHelper implements RsaHelperInterface
 
     public function __construct(?string $privateKeyPem = null, ?string $publicKeyPem = null)
     {
-        $this->privateKeyPem = $privateKeyPem ?? config('core.base::crypto.rsa.private_key');
-        $this->publicKeyPem = $publicKeyPem ?? config('core.base::crypto.rsa.public_key');
-        $this->passphrase = (string) config('core.base::crypto.rsa.passphrase', '');
+        $priv = $privateKeyPem ?? config('core.base::crypto.rsa.private_key');
+        $pub = $publicKeyPem ?? config('core.base::crypto.rsa.public_key');
+        $pass = config('core.base::crypto.rsa.passphrase', '');
+
+        $this->privateKeyPem = is_string($priv) ? $priv : null;
+        $this->publicKeyPem = is_string($pub) ? $pub : null;
+        $this->passphrase = is_string($pass) ? $pass : '';
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -76,9 +80,14 @@ class RsaHelper implements RsaHelperInterface
         $this->assertKeySize($bits);
         $privateKey = RSA::createKey($bits);
 
+        $privateKey = RSA::createKey($bits);
+        /** @var PrivateKey $privateKey */
+        $publicKey = $privateKey->getPublicKey();
+        /** @var PublicKey $publicKey */
+
         return [
             'private' => $privateKey->toString('PKCS8'),
-            'public' => $privateKey->getPublicKey()->toString('PKCS8'),
+            'public' => $publicKey->toString('PKCS8'),
         ];
     }
 
@@ -91,9 +100,17 @@ class RsaHelper implements RsaHelperInterface
 
         $privateKey = RSA::createKey($bits);
 
+        $privateKey = RSA::createKey($bits);
+        /** @var PrivateKey $privateKey */
+        $publicKey = $privateKey->getPublicKey();
+        /** @var PublicKey $publicKey */
+
+        /** @var PrivateKey $privateKeyWithPass */
+        $privateKeyWithPass = $privateKey->withPassword($passphrase);
+
         return [
-            'private' => $privateKey->withPassword($passphrase)->toString('PKCS8'),
-            'public' => $privateKey->getPublicKey()->toString('PKCS8'),
+            'private' => $privateKeyWithPass->toString('PKCS8'),
+            'public' => $publicKey->toString('PKCS8'),
         ];
     }
 
@@ -104,7 +121,10 @@ class RsaHelper implements RsaHelperInterface
             throw new RuntimeException('ต้องเป็น private key เท่านั้น');
         }
 
-        return $key->getPublicKey()->toString('PKCS8');
+        /** @var PublicKey $publicKey */
+        $publicKey = $key->getPublicKey();
+
+        return $publicKey->toString('PKCS8');
     }
 
     public function isKeyPairMatch(string $privateKeyPem, string $publicKeyPem): bool
@@ -161,6 +181,7 @@ class RsaHelper implements RsaHelperInterface
     {
         $loaded = $this->loadRawKey($key);
         $publicKey = $loaded instanceof PrivateKey ? $loaded->getPublicKey() : $loaded;
+        /** @var PublicKey $publicKey */
         $bits = $publicKey->getLength();
 
         return [

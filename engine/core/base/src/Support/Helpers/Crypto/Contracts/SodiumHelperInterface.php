@@ -23,14 +23,15 @@ interface SodiumHelperInterface
 {
     // ─── 1. Symmetric Encryption ────────────────────────────────
 
-    public function encrypt(string $message, ?string $keyBase64 = null, bool $returnBase64 = true): string;
+    public function encrypt(mixed $message, ?string $keyBase64 = null, bool $useBinary = false): string;
 
-    public function decrypt(string $payloadBase64, ?string $keyBase64 = null, bool $isBase64Input = true): mixed;
+    public function decrypt(string $payloadBase64, ?string $keyBase64 = null, bool $useBinary = false): mixed;
 
     // ─── 2. AEAD ────────────────────────────────────────────────
-    public function encryptAead(string $message, string $aad = '', ?string $keyb64 = null, bool $returnBase64 = true): string;
 
-    public function decryptAead(string $decoded, string $aad = '', ?string $keyb64 = null, bool $isBase64Input = true): mixed;
+    public function encryptAead(string $aad, ?string $keyBase64, mixed $message, ?string $nonce = null, bool $useBinary = false): string;
+
+    public function decryptAead(string $aad, ?string $keyBase64, string $payload, ?string $nonce = null, bool $useBinary = false): mixed;
 
     // ─── 3. Asymmetric Box & Seal ───────────────────────────────
 
@@ -52,15 +53,15 @@ interface SodiumHelperInterface
 
     // ─── 4. Digital Signatures ──────────────────────────────────
 
-    public function sign(string $message, string $secretKeyBase64, bool $isBase64 = false, bool $urlSafe = false): string;
+    public function sign(mixed $message, string $secretKeyBase64, bool $useBinary = false): string;
 
-    public function verify(string $signature, string $message, string $publicKeyBase64): bool;
+    public function verify(string $signature, mixed $message, string $publicKeyBase64, bool $useBinary = false): bool;
 
     public function signInit(): string;
 
     public function signUpdate(string &$state, string $chunk): void;
 
-    public function signFinalCreate(string $state, string $secretKeyBase64): string;
+    public function signFinalCreate(string $state, string $secretKeyBase64, bool $useBinary = false): string;
 
     public function signFinalVerify(string $state, string $signatureBase64, string $publicKeyBase64): bool;
 
@@ -72,21 +73,33 @@ interface SodiumHelperInterface
 
     public function decryptFile(string $sourcePath, string $destPath, ?string $keyBase64 = null): void;
 
-    /** @param resource $inputStream  @param resource $outputStream */
-    public function encryptStream($inputStream, $outputStream, string $keyBase64): void;
+    /**
+     * @param  resource  $inputStream
+     * @param  resource  $outputStream
+     */
+    public function encryptStream(mixed $inputStream, mixed $outputStream, string $keyBase64): void;
 
-    /** @param resource $inputStream  @param resource $outputStream */
-    public function decryptStream($inputStream, $outputStream, string $keyBase64): void;
+    /**
+     * @param  resource  $inputStream
+     * @param  resource  $outputStream
+     */
+    public function decryptStream(mixed $inputStream, mixed $outputStream, string $keyBase64): void;
 
     // ─── 7. Hybrid Stream Encryption ────────────────────────────
 
-    /** @param resource $inputStream  @param resource $outputStream */
-    public function sealStream($inputStream, $outputStream, string $recipientPublicKey): void;
+    /**
+     * @param  resource  $inputStream
+     * @param  resource  $outputStream
+     */
+    public function sealStream(mixed $inputStream, mixed $outputStream, string $recipientPublicKey): void;
 
-    /** @param resource $inputStream  @param resource $outputStream */
+    /**
+     * @param  resource  $inputStream
+     * @param  resource  $outputStream
+     */
     public function openSealedStream(
-        $inputStream,
-        $outputStream,
+        mixed $inputStream,
+        mixed $outputStream,
         string $recipientPublicKey,
         string $recipientSecretKey,
     ): void;
@@ -94,10 +107,10 @@ interface SodiumHelperInterface
     // ─── 8. Stream Signatures ───────────────────────────────────
 
     /** @param resource $inputStream */
-    public function signStream($inputStream, string $secretKeyBase64): string;
+    public function signStream(mixed $inputStream, string $secretKeyBase64, bool $useBinary = false): string;
 
     /** @param resource $inputStream */
-    public function verifyStreamSignature($inputStream, string $signatureBase64, string $publicKeyBase64): bool;
+    public function verifyStreamSignature(mixed $inputStream, string $signatureBase64, string $publicKeyBase64): bool;
 
     // ─── 9. Hashing & KDF ───────────────────────────────────────
 

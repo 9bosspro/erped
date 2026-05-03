@@ -186,9 +186,9 @@ interface StorageDriverInterface
      *
      * @param  string|null  $name  ชื่อไฟล์ที่ browser จะเห็น
      * @param  array<string, mixed>  $headers  HTTP headers เพิ่มเติม
-     * @return mixed StreamedResponse หรือ BinaryFileResponse
+     * @return \Symfony\Component\HttpFoundation\Response StreamedResponse หรือ BinaryFileResponse
      */
-    public function download(string $path, ?string $name = null, array $headers = []): mixed;
+    public function download(string $path, ?string $name = null, array $headers = []): \Symfony\Component\HttpFoundation\Response;
 
     /**
      * คืน inline response สำหรับ browser (Content-Disposition: inline)

@@ -18,7 +18,9 @@ final class BaseHelper
      */
     public function getDateFormat(): string
     {
-        return (string) config('core.base.general.date_format.date', 'Y-m-d');
+        $val = config('core.base.general.date_format.date', 'Y-m-d');
+
+        return is_scalar($val) ? (string) $val : 'Y-m-d';
     }
 
     /**
@@ -27,6 +29,8 @@ final class BaseHelper
      */
     public function getDateTimeFormat(): string
     {
-        return (string) config('core.base.general.date_format.date_time', 'Y-m-d H:i:s');
+        $val = config('core.base.general.date_format.date_time', 'Y-m-d H:i:s');
+
+        return is_scalar($val) ? (string) $val : 'Y-m-d H:i:s';
     }
 }

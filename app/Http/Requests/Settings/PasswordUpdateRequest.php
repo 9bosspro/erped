@@ -7,6 +7,7 @@ use Illuminate\Validation\Rules\Password;
 
 class PasswordUpdateRequest extends FormRequest
 {
+    /** @return array<string, list<mixed>> */
     public function rules(): array
     {
         return [

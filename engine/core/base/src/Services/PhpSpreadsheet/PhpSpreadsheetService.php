@@ -11,6 +11,7 @@ use PhpOffice\PhpSpreadsheet\Reader\IReader;
 use PhpOffice\PhpSpreadsheet\Reader\Xls;
 use PhpOffice\PhpSpreadsheet\Reader\Xlsx;
 use RuntimeException;
+use Stringable;
 
 /**
  * PhpSpreadsheetService — อ่าน/นำเข้าไฟล์ spreadsheet (CSV, XLSX, XLS)
@@ -121,7 +122,7 @@ class PhpSpreadsheetService
         unset($data[0]);
 
         if ($selectFields === []) {
-            $selectFields = array_map(fn ($h) => (string) $h, $headers);
+            $selectFields = array_map(fn ($h) => is_scalar($h) || $h instanceof Stringable ? (string) $h : '', $headers);
         }
 
         $items = array_values($data);
@@ -131,7 +132,7 @@ class PhpSpreadsheetService
             $mapped = [];
 
             foreach ($headers as $index => $columnName) {
-                $colStr = (string) $columnName;
+                $colStr = is_scalar($columnName) || $columnName instanceof Stringable ? (string) $columnName : '';
                 if (in_array($colStr, $selectFields, true) && isset($row[$index])) {
                     $mapped[$colStr] = $row[$index];
                 }
@@ -210,7 +211,11 @@ class PhpSpreadsheetService
             return [];
         }
 
-        $headers = (array) $data[0];
+        $headers = array_values(array_map(
+            fn ($h): string => is_scalar($h) ? (string) $h : '',
+            (array) $data[0],
+        ));
+        /** @phpstan-ignore-next-line */
         $dbColumns = (array) $model->list_Columns();
         $headers = gen_subset_arrays($headers, $dbColumns);
 
@@ -232,7 +237,7 @@ class PhpSpreadsheetService
         if ($selectFields === []) {
             $selectFields = array_map(fn ($h) => (string) $h, $headers);
         }
-        $selectFields = gen_subset_arrays($selectFields, $headers);
+        $selectFields = array_map(fn ($s) => (string) $s, gen_subset_arrays($selectFields, $headers));
 
         // แปลงเป็น associative
         /** @var Collection<int, array<string, mixed>> $collection */
@@ -267,6 +272,7 @@ class PhpSpreadsheetService
         foreach ($filtered->chunk(1024) as $chunk) {
             $chunkData = $chunk->values()->all();
             $results[] = $chunkData;
+            /** @phpstan-ignore-next-line */
             $model::upsert($chunkData, $uniqueKeys, $updateColumns);
         }
 

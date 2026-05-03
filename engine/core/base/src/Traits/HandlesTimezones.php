@@ -34,15 +34,22 @@ trait HandlesTimezones
     /**
      * แปลง datetime string เป็น timezone ของ user ที่ login อยู่
      *
+     * ใช้ static cache เพื่อลด Auth::user() calls ใน loop ที่มี models หลายตัว
+     *
      * @param  string  $value  datetime string (Y-m-d H:i:s)
      * @return string datetime ใน timezone ของ user (Y-m-d H:i:s)
      */
     protected function convertToUserTimezone(string $value): string
     {
-        // ตรวจ Auth::check() ก่อน เพื่อหลีกเลี่ยง user() เป็น null
-        $timezone = (Auth::check() && Auth::user()?->timezone)
-            ? (string) Auth::user()->timezone
-            : (string) config('app.timezone', 'UTC');
+        static $timezone = null;
+
+        if ($timezone === null) {
+            $userTz = Auth::check() ? Auth::user()?->timezone : null;
+            $defaultTz = config('app.timezone', 'UTC');
+            $timezone = (is_string($userTz) && $userTz !== '')
+                ? $userTz
+                : (is_string($defaultTz) ? $defaultTz : 'UTC');
+        }
 
         return Carbon::parse($value)->timezone($timezone)->format('Y-m-d H:i:s');
     }

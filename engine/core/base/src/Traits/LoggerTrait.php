@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Log;
  *
  * ใช้ Laravel Log facade ไม่ใช่ echo ป้องกันข้อมูล leak ใน production
  * รองรับทุก PSR-3 log level: debug, info, notice, warning, error, critical, alert, emergency
+ *
+ * @experimental ยังไม่มี usage ในโปรเจค — พร้อมใช้เมื่อ module ต้องการ
  */
 trait LoggerTrait
 {

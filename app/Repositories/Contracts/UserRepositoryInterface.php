@@ -30,17 +30,14 @@ interface UserRepositoryInterface
     /**
      * สร้างผู้ใช้งานใหม่ในระบบ
      *
-     * @param array $data ข้อมูลสำหรับสร้างผู้ใช้งาน
-     * @return User โมเดลผู้ใช้งานที่ถูกสร้างขึ้น
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): User;
 
     /**
      * อัปเดตข้อมูลผู้ใช้งานและล้างแคชเพื่อให้ข้อมูลเป็นปัจจุบันเสมอ
      *
-     * @param User $user โมเดลผู้ใช้งานที่ต้องการอัปเดต
-     * @param array $data ข้อมูลใหม่ที่ต้องการเปลี่ยนแปลง
-     * @return User โมเดลผู้ใช้งานที่อัปเดตเรียบร้อยแล้ว
+     * @param  array<string, mixed>  $data
      */
     public function update(User $user, array $data): User;
 

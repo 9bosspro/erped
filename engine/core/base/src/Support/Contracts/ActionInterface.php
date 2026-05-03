@@ -35,6 +35,7 @@ interface ActionInterface
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (min 1)
      * @param  bool  $once  true = รันครั้งเดียวแล้วลบออกอัตโนมัติ
      * @param  string|null  $scope  จำกัด scope เช่น 'admin', 'api', 'web'
+     * @return string UUID ของ listener — ใช้ removeListener() เพื่อลบ
      */
     public function addListener(
         string|array $hook,
@@ -43,7 +44,7 @@ interface ActionInterface
         int $arguments = 1,
         bool $once = false,
         ?string $scope = null,
-    ): void;
+    ): string;
 
     /**
      * ลงทะเบียน callback แบบ one-shot (รันครั้งเดียวแล้วลบอัตโนมัติ)
@@ -53,6 +54,7 @@ interface ActionInterface
      * @param  int  $priority  ลำดับ (default 10)
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (min 1)
      * @param  string|null  $scope  จำกัด scope
+     * @return string UUID ของ listener
      */
     public function addOnceListener(
         string|array $hook,
@@ -60,7 +62,7 @@ interface ActionInterface
         int $priority = 10,
         int $arguments = 1,
         ?string $scope = null,
-    ): void;
+    ): string;
 
     /**
      * ลบ listeners ของ hook หรือลบเฉพาะ listener ที่ระบุ id

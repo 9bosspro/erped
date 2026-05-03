@@ -59,15 +59,21 @@ final class JiraClient
 
                 $data = json_decode($response->getBody()->getContents());
 
+                if (! is_object($data)) {
+                    continue;
+                }
+
+                $issues = isset($data->issues) && is_array($data->issues) ? $data->issues : [];
+
                 $results[$projectKey] = [
-                    'total' => $data->total,
+                    'total' => $data->total ?? 0,
                     'issues' => array_map(
                         fn ($issue) => [
-                            'code' => $issue->key,
-                            'name' => $issue->fields->summary,
+                            'code' => is_object($issue) ? ($issue->key ?? '') : '',
+                            'name' => (is_object($issue) && isset($issue->fields->summary)) ? $issue->fields->summary : '',
                             'data' => $issue,
                         ],
-                        $data->issues,
+                        $issues,
                     ),
                 ];
             }
@@ -96,7 +102,9 @@ final class JiraClient
 
             $response = $client->get("/rest/api/2/issue/{$issueKey}");
 
-            return json_decode($response->getBody()->getContents());
+            $data = json_decode($response->getBody()->getContents());
+
+            return is_object($data) ? $data : null;
         } catch (GuzzleException $e) {
             Log::error('Jira getTicketDetails failed', ['error' => $e->getMessage()]);
 

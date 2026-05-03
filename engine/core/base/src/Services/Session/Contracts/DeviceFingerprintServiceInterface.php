@@ -23,32 +23,32 @@ interface DeviceFingerprintServiceInterface
     /**
      * Parse request และเก็บข้อมูลใน instance (lazy, cache ต่อ UA + Client Hints)
      *
-     * @param  Request  $request  HTTP request ปัจจุบัน
+     * @param  Request|null  $request  HTTP request ปัจจุบัน (ถ้า null จะใช้ current request)
      * @return static instance ที่ parse แล้ว (fluent)
      */
-    public function fromRequest(Request $request): static;
+    public function fromRequest(?Request $request = null): static;
 
     // ─── Hash ───────────────────────────────────────────────────
 
     /**
      * สร้าง server-side fingerprint hash (HMAC-SHA256)
      *
-     * @param  Request  $request  HTTP request ปัจจุบัน
+     * @param  Request|null  $request  HTTP request ปัจจุบัน (ถ้า null จะใช้ current request)
      * @return string HMAC-SHA256 fingerprint hash
      *
      * @throws RuntimeException ถ้า app.key ว่าง
      */
-    public function fingerprint(Request $request): string;
+    public function fingerprint(?Request $request = null): string;
 
     // ─── Analysis ───────────────────────────────────────────────
 
     /**
      * วิเคราะห์ device ครบทุกมิติ + risk scoring
      *
-     * @param  Request  $request  HTTP request ปัจจุบัน
+     * @param  Request|null  $request  HTTP request ปัจจุบัน (ถ้า null จะใช้ current request)
      * @return array<string, mixed> ผลวิเคราะห์รวม fingerprint + risk_score
      */
-    public function analyze(Request $request): array;
+    public function analyze(?Request $request = null): array;
 
     // ─── Bot / Type ──────────────────────────────────────────────
 

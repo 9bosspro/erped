@@ -75,7 +75,9 @@ class CrossHostReceiver
         // บันทึก nonce หลังผ่านการตรวจแล้ว เพื่อป้องกัน replay ในอนาคต
         $this->consumeNonce($nonce);
 
-        return json_decode($jsonPayload, true) ?? [];
+        $decoded = json_decode($jsonPayload, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     // ─── Sealed Payload ────────────────────────────────────────────────────
@@ -91,7 +93,8 @@ class CrossHostReceiver
      */
     public function receiveSealedPayload(Request $request): array
     {
-        if (empty($this->myPrivateKeyBase64)) {
+        $privateKey = $this->myPrivateKeyBase64;
+        if (empty($privateKey)) {
             throw new RuntimeException('Server configuration error: missing private key.');
         }
 
@@ -118,7 +121,7 @@ class CrossHostReceiver
 
         // แกะกล่อง (Libsodium Unseal) — error ภายในถูก log ไม่รั่วออกไปผู้ใช้
         try {
-            $unsealedJson = $this->sodium->sealOpenWithKeyPair($sealedBox, $this->myPrivateKeyBase64);
+            $unsealedJson = $this->sodium->sealOpenWithKeyPair($sealedBox, $privateKey);
         } catch (Exception $e) {
             Log::error('CrossHost sealed payload: unseal failed', [
                 'ip' => $request->ip(),
@@ -131,7 +134,9 @@ class CrossHostReceiver
         // บันทึก nonce หลังผ่านการตรวจแล้ว
         $this->consumeNonce($nonce);
 
-        return json_decode($unsealedJson, true) ?? [];
+        $decoded = json_decode($unsealedJson, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     // ─── Internal ──────────────────────────────────────────────────────────

@@ -17,12 +17,12 @@ if (! function_exists('gen_path')) {
     /**
      * สร้างและคืนค่าพาธแบบเต็มโดยรวมพาธฐานและพาธเสริม
      *
-     * @param  bool|string  $full  พาธฐาน หรือ `false` เพื่อคืนค่า `false`
+     * @param  false|string  $full  พาธฐาน หรือ `false` เพื่อคืนค่า `false`
      * @param  string|null  $path  พาธเสริมที่ต้องการต่อท้าย (ไม่บังคับ)
      * @param  bool  $real  ระบุว่าจะคืนค่าเป็น realpath หรือไม่
-     * @return bool|string พาธแบบเต็มที่สร้างขึ้นมา หรือ `false` หาก `$full` เป็น `false`
+     * @return false|string พาธแบบเต็มที่สร้างขึ้นมา หรือ `false` หาก `$full` เป็น `false`
      */
-    function gen_path(string|bool $full = '', ?string $path = '', bool $real = false): string|bool
+    function gen_path(string|false $full = '', ?string $path = '', bool $real = false): string|false
     {
         if ($full === false) {
             return false;
@@ -54,7 +54,7 @@ if (! function_exists('base_engine_path')) {
      * @param  bool  $real  คืนค่า path ที่ถูกต้องตาม OS
      * @return string
      */
-    function base_engine_path(bool $real = false): string|bool
+    function base_engine_path(bool $real = false): string|false
     {
         $full = base_path('engine');
 
@@ -70,7 +70,7 @@ if (! function_exists('engine_path')) {
      * @param  bool  $real  คืนค่า path ที่ถูกต้องตาม OS
      * @return string
      */
-    function engine_path(?string $path = null, bool $real = false): string|bool
+    function engine_path(?string $path = null, bool $real = false): string|false
     {
         return gen_path(base_engine_path(), $path, $real);
     }
@@ -167,7 +167,7 @@ if (! function_exists('normalize_path')) {
         $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
 
         // ลบ duplicate separators
-        $path = preg_replace('#'.preg_quote(DIRECTORY_SEPARATOR, '#').'{2,}#', DIRECTORY_SEPARATOR, $path);
+        $path = preg_replace('#'.preg_quote(DIRECTORY_SEPARATOR, '#').'{2,}#', DIRECTORY_SEPARATOR, $path) ?? $path;
 
         // ลบ trailing separator (ยกเว้น root path เช่น "/" หรือ "C:\")
         return rtrim($path, DIRECTORY_SEPARATOR) ?: $path;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Core\Base\Support;
+namespace Core\Base\Support\Helpers\Stub;
 
 /**
  * StubResult — Value Object แสดงผลการ generate stub ไฟล์

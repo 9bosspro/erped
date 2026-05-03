@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static bool setThemes(?string $themeName, ?string $type = 'frontend')
  *
  * @see \Core\Themes\Services\ModuleContextService
+ * @see \Core\Themes\Services\Contracts\ModuleContextServiceInterface
  */
 class ModuleContext extends Facade
 {

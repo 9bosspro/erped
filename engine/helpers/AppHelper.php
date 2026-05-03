@@ -2,11 +2,6 @@
 
 declare(strict_types=1);
 
-/* use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str; */
-
 /*
 |--------------------------------------------------------------------------
 | Global Helper Functions (Laravel Standard Edition 2025)
@@ -25,17 +20,16 @@ use Illuminate\Support\Str; */
 |
 */
 // Load order matters! Check dependencies before changing.
-// StringHelper → JsonHelper → SecurityHelper → DebugHelper
+// CommonHelper → PathHelper → JsonHelper → StringHelper → ArrayHelper → ThaiHelper → DebugHelper
 
-require_once __DIR__.'/CommonHelper.php';     // ppp_strlen (used by JsonHelper)
-require_once __DIR__.'/PathHelper.php';       // no dependencies
-// require_once __DIR__ . '/DateHelper.php';      // Empty File
-require_once __DIR__.'/JsonHelper.php';       // json_encode_th, is_jsons (used by Security, Debug)
+require_once __DIR__.'/CommonHelper.php';     // current_local, is_api_request, dispatch_safe (no dependencies)
+require_once __DIR__.'/PathHelper.php';       // gen_path, normalize_path (no dependencies)
+require_once __DIR__.'/JsonHelper.php';       // return_success, return_error, is_jsons (no dependencies)
+require_once __DIR__.'/StringHelper.php';     // ppp_strlen, trim_null, data_ready (no dependencies)
+require_once __DIR__.'/ArrayHelper.php';      // array_some, array_every, gen_subset_arrays (no dependencies)
+require_once __DIR__.'/ThaiHelper.php';       // check_citizen_id, remaining_time_text (no dependencies)
+require_once __DIR__.'/DebugHelper.php';      // tt, ttt — depends on JsonHelper (is_jsons)
 // require_once __DIR__ . '/HashHelper.php';    // [REMOVED] → ย้ายไป Core\Base\Support\Helpers\Crypto\HashHelper
 // require_once __DIR__ . '/CryptHelper.php';   // [REMOVED] → ย้ายไป Core\Base\Support\Helpers\Crypto\SodiumHelper
 // require_once __DIR__ . '/JwtHelper.php';     // [REMOVED] → ย้ายไป Core\Base\Support\Helpers\Crypto\JwtHelper
 // require_once __DIR__ . '/RsalHelper.php';    // [REMOVED] → ย้ายไป Core\Base\Support\Helpers\Crypto\SodiumHelper
-require_once __DIR__.'/StringHelper.php';     // ppp_strlen (used by JsonHelper)
-require_once __DIR__.'/ArrayHelper.php';      // no dependencies
-require_once __DIR__.'/ThaiHelper.php';       // no dependencies
-require_once __DIR__.'/DebugHelper.php';      // depends on JsonHelper

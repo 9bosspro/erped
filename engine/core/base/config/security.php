@@ -29,6 +29,9 @@ return [
     // กุญแจหลักสำหรับอนุมานกุญแจย่อยด้วย HKDF-SHA3-256
     // ⚠️ ต้องมีความยาวอย่างน้อย 32 bytes (recommend: 64+ bytes)
     'masterkey' => env('MASTERKEY'),
+    'version_masterkey' => env('VERSION_MASTERKEY'),
+    'masterkey_previous_keys' => env('MASTERKEY_PREVIOUS_KEYS'),
+    'cast_key' => env('CAST_KEY'),
 
     // ─── Sodium Secret Key (32 bytes) ────────────────────────────────
     // กุญแจ Base64 สำหรับ XSalsa20-Poly1305 SecretBox / XChaCha20-Poly1305 AEAD

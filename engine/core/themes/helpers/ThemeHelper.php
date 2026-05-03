@@ -90,7 +90,9 @@ if (! function_exists('module_views')) {
         $module = current_module();
         $viewPath = $module ? "{$module}::{$view}" : $view;
 
-        return view($viewPath, $data, $mergeData);
+        // ใช้ view()->make() เพราะ $viewPath เป็น dynamic string
+        // view() helper ต้องการ view-string literal ที่ PHPStan ตรวจสอบได้
+        return view()->make($viewPath, $data, $mergeData);
     }
 }
 

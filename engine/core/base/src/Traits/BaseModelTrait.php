@@ -52,7 +52,8 @@ trait BaseModelTrait
             return '';
         }
 
-        $hashHelper = new \Core\Base\Support\Helpers\Crypto\HashHelper;
+        /** @var \Core\Base\Support\Helpers\Crypto\Contracts\HashHelperInterface $hashHelper */
+        $hashHelper = app(\Core\Base\Support\Helpers\Crypto\Contracts\HashHelperInterface::class);
         do {
             $uuid = $hashHelper->generateId(7, false);
         } while ($this->where($column, $uuid)->select($column)->exists());
@@ -66,7 +67,7 @@ trait BaseModelTrait
      * Eloquent ไม่รองรับ composite PK โดยตรง
      * method นี้เป็น workaround สำหรับ Model ที่ใช้ composite PK
      *
-     * @param  array  $options  ตัวเลือกเพิ่มเติม — รองรับ 'touch' (bool, default: true)
+     * @param  array<string, mixed>  $options  ตัวเลือกเพิ่มเติม — รองรับ 'touch' (bool, default: true)
      * @return bool true ถ้าบันทึกสำเร็จ
      */
     public function saveComposite(array $options = []): bool
@@ -79,6 +80,7 @@ trait BaseModelTrait
             return false;
         }
 
+        /** @var \Illuminate\Database\Eloquent\Builder<static> $query */
         $query = $this->newQueryWithoutScopes();
 
         if ($this->exists) {

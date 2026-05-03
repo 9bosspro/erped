@@ -158,7 +158,9 @@ if (! function_exists('istheme_paths')) {
             return false;
         }
 
-        return is_dir(theme_paths($type.'/'.$names));
+        $path = theme_paths($type.'/'.$names);
+
+        return is_string($path) && is_dir($path);
     }
 }
 if (! function_exists('normalizeData')) {
@@ -178,7 +180,9 @@ if (! function_exists('normalizeData')) {
             return (string) $data;
         }
 
-        return canonicalize($data);
+        $result = canonicalize($data);
+
+        return \is_string($result) ? $result : (string) json_encode($result);
     }
 }
 
@@ -187,6 +191,7 @@ if (! function_exists('canonicalize')) {
      * Normalize mixed data to a canonical JSON string (sorted keys)
      *
      * @param  mixed  $data  Data to normalize
+     * @return array<array-key, mixed>|string
      */
     function canonicalize(mixed $data, bool $checkstring = false, bool $encode = true): string|array
     {
@@ -210,13 +215,13 @@ if (! function_exists('canonicalize')) {
         }
 
         if ($encode) {
-            return json_encode(
+            return (string) json_encode(
                 $data,
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
             );
         }
 
-        return $data;
+        return is_array($data) ? $data : (is_scalar($data) ? (string) $data : '');
     }
 }
 
@@ -230,7 +235,8 @@ if (! function_exists('deriveKey')) {
      */
     function deriveKey(string $purpose, string $system, int $length = 32): string
     {
-        $masterKey = (string) config('core.base::security.masterkey');
+        $configValue = config('core.base::security.masterkey');
+        $masterKey = is_string($configValue) ? $configValue : '';
 
         if (empty($masterKey)) {
             throw new RuntimeException('Security Master Key is not configured in core.base::security.');
@@ -283,7 +289,13 @@ if (! function_exists('cache_remember')) {
      */
     function cache_remember(string $key, callable $callback, int $ttl = 1800): mixed
     {
-        return cache()->remember($key, config('cache.lifetime', $ttl), $callback);
+        $lifetime = config('cache.lifetime', $ttl);
+
+        return cache()->remember(
+            $key,
+            is_int($lifetime) ? $lifetime : $ttl,
+            Closure::fromCallable($callback),
+        );
     }
 }
 
@@ -313,9 +325,11 @@ if (! function_exists('get_options')) {
             return $query->where('setting_key', $key)->first();
         });
 
+        $value = is_object($option) ? ($option->value ?? null) : null;
+
         return $decode
-            ? json_decode($option->value ?? '', true)
-            : ($option->value ?? null);
+            ? json_decode(is_string($value) ? $value : '', true)
+            : $value;
     }
 }
 
@@ -336,7 +350,9 @@ if (! function_exists('decodeb64')) {
     function decodeb64(string $base64): string
     {
         try {
-            return Core\Base\Support\Helpers\Crypto\HashHelper::decodeb64($base64);
+            $result = Core\Base\Support\Helpers\Crypto\HashHelper::decodeb64($base64);
+
+            return $result === false ? '' : $result;
         } catch (Throwable $e) {
             return '';
         }
@@ -349,7 +365,7 @@ if (! function_exists('encodeb64UrlSafe')) {
      */
     function encodeb64UrlSafe(string $rawBinary): string
     {
-        return Core\Base\Support\Helpers\Crypto\HashHelper::encodeb64UrlSafe($rawBinary);
+        return Core\Base\Support\Helpers\Crypto\HashHelper::encodeUrlSafe($rawBinary);
     }
 }
 if (! function_exists('decodeb64UrlSafe')) {
@@ -359,7 +375,9 @@ if (! function_exists('decodeb64UrlSafe')) {
     function decodeb64UrlSafe(string $base64Url): string
     {
         try {
-            return Core\Base\Support\Helpers\Crypto\HashHelper::decodeb64UrlSafe($base64Url);
+            $result = Core\Base\Support\Helpers\Crypto\HashHelper::decodeUrlSafe($base64Url);
+
+            return $result === false ? '' : $result;
         } catch (Throwable $e) {
             return '';
         }
@@ -372,7 +390,7 @@ if (! function_exists('is_base64')) {
      */
     function is_base64(string $string): bool
     {
-        return Core\Base\Support\Helpers\Crypto\HashHelper::isB64($string);
+        return Core\Base\Support\Helpers\Crypto\HashHelper::isBase64($string);
     }
 }
 
@@ -385,5 +403,130 @@ if (! function_exists('is_json')) {
     function is_json(?string $value, bool $allowEmpty = false): bool
     {
         return Core\Base\Support\Helpers\Crypto\HashHelper::isJson($value, $allowEmpty);
+    }
+}
+if (! function_exists('encodeKey')) {
+    /**
+     * Encode binary data to Hex or Base64URL
+     */
+    function encodeKey(string $binaryData, bool $useBinary = false): string
+    {
+        return $useBinary
+            ? $binaryData
+            : Core\Base\Support\Helpers\Crypto\HashHelper::encodeUrlSafe($binaryData);
+    }
+}
+
+if (! function_exists('decodeKey')) {
+    /**
+     * Decode Hex or Base64URL to binary data
+     */
+    function decodeKey(string $encodedKey, bool $useBinary = false): ?string
+    {
+        try {
+            return $useBinary
+                ? $encodedKey
+                : Core\Base\Support\Helpers\Crypto\HashHelper::decodeKey($encodedKey);
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+}
+
+if (! function_exists('parseKey')) {
+    /**
+     * Parse key from Base64 or Hex
+     */
+    function parseKey(?string $key): ?string
+    {
+        try {
+            if ($key === null) {
+                return null;
+            }
+            $hashHelper = new Core\Base\Support\Helpers\Crypto\HashHelper;
+
+            return $hashHelper->parseKey($key);
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+}
+if (! function_exists('resolveKey')) {
+    /**
+     * Resolve key from Base64 or Hex
+     */
+    function resolveKey(?string $keyBase64, int $length = 32): ?string
+    {
+        try {
+            $hashHelper = new Core\Base\Support\Helpers\Crypto\HashHelper;
+
+            return $hashHelper->resolveKey($keyBase64, $length);
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+}
+if (! function_exists('genHashByName')) {
+    /**
+     * Generate hash by name
+     */
+    function genHashByName(string $name, ?string $masterKey, int $length = SODIUM_CRYPTO_SECRETBOX_KEYBYTES, int $subkeyId = 1): ?string
+    {
+        if ($masterKey === null) {
+            return null;
+        }
+        $hashHelper = new Core\Base\Support\Helpers\Crypto\HashHelper;
+
+        return $hashHelper->genHashByName($name, $masterKey, $length, $subkeyId);
+    }
+}
+if (! function_exists('base64url_encode')) {
+    function base64url_encode(string $data): string
+    {
+        return rtrim(
+            strtr(base64_encode($data), '+/', '-_'),
+            '=',
+        );
+    }
+}
+if (! function_exists('base64url_decode')) {
+    /**
+     * Decode Base64URL
+     */
+    function base64url_decode(string $data): string
+    {
+        $padding = strlen($data) % 4;
+
+        if ($padding) {
+            $data .= str_repeat('=', 4 - $padding);
+        }
+
+        return base64_decode(
+            strtr($data, '-_', '+/'),
+        );
+    }
+}
+if (! function_exists('coreEncrypt')) {
+    /**
+     * Encrypt a value using SodiumHelper
+     */
+    function coreEncrypt(string $value, ?string $key = null): ?string
+    {
+        /** @var Core\Base\Support\Helpers\Crypto\SodiumHelper $sodium */
+        $sodium = app('core.crypto.sodium');
+
+        return $sodium->coreEncrypt($value, $key);
+    }
+}
+if (! function_exists('coreDecrypt')) {
+    /**
+     * Decrypt a value using SodiumHelper
+     */
+    function coreDecrypt(string $payload, ?string $key = null): ?string
+    {
+        /** @var Core\Base\Support\Helpers\Crypto\SodiumHelper $sodium */
+        $sodium = app('core.crypto.sodium');
+
+        return $sodium->coreDecrypt($payload, $key);
     }
 }

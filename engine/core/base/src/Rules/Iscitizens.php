@@ -22,7 +22,7 @@ class Iscitizens implements ValidationRule
         Closure $fail,
     ): void {
         //
-        if (! check_citizen_id((string) $value)) {
+        if (! is_scalar($value) || ! check_citizen_id((string) $value)) {
             $fail('The :attribute จำเป้นต้องเป็นเลขประจำตัวประชาชน');
         }
     }

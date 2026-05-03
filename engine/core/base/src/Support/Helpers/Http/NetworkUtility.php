@@ -74,12 +74,12 @@ final class NetworkUtility
         foreach ($headers as $header) {
             $value = $_SERVER[$header] ?? null;
 
-            if (empty($value)) {
+            if (empty($value) || ! is_scalar($value)) {
                 continue;
             }
 
             // X-Forwarded-For อาจมีหลาย IP: "client, proxy1, proxy2"
-            $ip = trim(explode(',', $value)[0]);
+            $ip = trim(explode(',', (string) $value)[0]);
 
             if (filter_var($ip, FILTER_VALIDATE_IP)) {
                 return $ip === '::1' ? '127.0.0.1' : $ip;
@@ -132,7 +132,9 @@ final class NetworkUtility
      */
     public function parseUserAgent(string $userAgent = ''): array
     {
-        $userAgent = $userAgent ?: ($_SERVER['HTTP_USER_AGENT'] ?? '');
+        $serverUa = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $serverUaStr = is_scalar($serverUa) ? (string) $serverUa : '';
+        $userAgent = $userAgent ?: $serverUaStr;
 
         return [
             'os' => $this->detectOs($userAgent),

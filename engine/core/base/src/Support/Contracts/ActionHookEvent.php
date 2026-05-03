@@ -19,7 +19,7 @@ use Ramsey\Uuid\Uuid;
  * หลักการออกแบบ:
  *  - เก็บ listeners เป็น [hook][priority][] เพื่อรองรับหลาย callback ต่อ priority เดียวกัน
  *  - แยก raw listeners (write path) จาก sorted cache (read path)
- *  - Lazy rebuild cache เมื่อมีการเปลี่ยนแปลง (cacheDirty flag)
+ *  - Per-hook dirty tracking — rebuild เฉพาะ hook ที่เปลี่ยนแปลง ไม่ใช่ทั้งหมด
  *  - Dependency-injection container เพื่อหลีกเลี่ยงการ couple กับ global app()
  *  - ไม่ใช้ SplPriorityQueue เพราะไม่รองรับ random-access delete
  *
@@ -27,6 +27,7 @@ use Ramsey\Uuid\Uuid;
  * ```
  * listeners[hook][priority][] = ListenerData
  * listenerCache[hook][]       = ListenerData (sorted ascending by priority)
+ * dirtyHooks[hook]            = true  (เฉพาะ hook ที่ต้อง rebuild)
  * ```
  *
  * @phpstan-type ListenerData array{
@@ -42,25 +43,23 @@ abstract class ActionHookEvent
     /**
      * Raw listeners จัดกลุ่มตาม hook → priority → list
      *
-     * โครงสร้าง: listeners[hook][priority][] = ListenerData
-     *
-     * @var array<string, array<int, list<array<string, mixed>>>>
+     * @var array<string, array<int, list<ListenerData>>>
      */
     protected array $listeners = [];
 
     /**
-     * Sorted flat list สำหรับ iteration — rebuild เมื่อ cacheDirty=true
+     * Sorted flat list สำหรับ iteration — rebuild เมื่อ hook อยู่ใน dirtyHooks
      *
-     * โครงสร้าง: listenerCache[hook][] = ListenerData (เรียงตาม priority น้อยไปมาก)
-     *
-     * @var array<string, list<array<string, mixed>>>
+     * @var array<string, list<ListenerData>>
      */
     protected array $listenerCache = [];
 
     /**
-     * Flag ระบุว่า cache ต้องถูก rebuild หรือไม่
+     * Hook names ที่ต้อง rebuild cache — per-hook granularity
+     *
+     * @var array<string, true>
      */
-    protected bool $cacheDirty = false;
+    protected array $dirtyHooks = [];
 
     /**
      * @param  Container|null  $app  IoC container — ใช้ resolve callback แบบ "Class@method"
@@ -81,6 +80,7 @@ abstract class ActionHookEvent
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (min 1)
      * @param  bool  $once  true = รันครั้งเดียวแล้วลบออกอัตโนมัติ
      * @param  string|null  $scope  จำกัด scope เช่น 'admin', 'api', 'web'
+     * @return string UUID ของ listener — ใช้ removeListener() เพื่อลบ
      *
      * @throws InvalidArgumentException ถ้า hook ว่างเปล่า
      */
@@ -91,13 +91,15 @@ abstract class ActionHookEvent
         int $arguments = 1,
         bool $once = false,
         ?string $scope = null,
-    ): void {
+    ): string {
         if (empty($hook)) {
             throw new InvalidArgumentException('Hook name cannot be empty.');
         }
 
+        $id = Uuid::uuid7()->toString();
+
         $listenerData = [
-            'id' => Uuid::uuid7()->toString(),
+            'id' => $id,
             'callback' => $this->resolveCallback($callback),
             'arguments' => max(1, $arguments),
             'once' => $once,
@@ -105,25 +107,26 @@ abstract class ActionHookEvent
         ];
 
         foreach ((array) $hook as $hookName) {
-            if (! is_string($hookName) || $hookName === '') {
+            if (! \is_string($hookName) || $hookName === '') {
                 continue;
             }
 
             $this->listeners[$hookName][$priority][] = $listenerData;
-            $this->cacheDirty = true;
+            $this->dirtyHooks[$hookName] = true;
         }
+
+        return $id;
     }
 
     /**
      * ลงทะเบียน callback แบบ one-shot (รันครั้งเดียวแล้วลบอัตโนมัติ)
-     *
-     * Shortcut ของ addListener(..., once: true)
      *
      * @param  array<string>|string  $hook  ชื่อ hook หรือ array ของ hook
      * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
      * @param  int  $priority  ลำดับ (default 10)
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (min 1)
      * @param  string|null  $scope  จำกัด scope
+     * @return string UUID ของ listener
      *
      * @throws InvalidArgumentException ถ้า hook ว่างเปล่า
      */
@@ -133,8 +136,8 @@ abstract class ActionHookEvent
         int $priority = 10,
         int $arguments = 1,
         ?string $scope = null,
-    ): void {
-        $this->addListener($hook, $callback, $priority, $arguments, once: true, scope: $scope);
+    ): string {
+        return $this->addListener($hook, $callback, $priority, $arguments, once: true, scope: $scope);
     }
 
     /**
@@ -148,13 +151,13 @@ abstract class ActionHookEvent
         if ($hook === null) {
             $this->listeners = [];
             $this->listenerCache = [];
-            $this->cacheDirty = false;
+            $this->dirtyHooks = [];
 
             return $this;
         }
 
         foreach ((array) $hook as $hookName) {
-            if (! is_string($hookName) || ! isset($this->listeners[$hookName])) {
+            if (! \is_string($hookName) || ! isset($this->listeners[$hookName])) {
                 continue;
             }
 
@@ -162,8 +165,8 @@ abstract class ActionHookEvent
                 unset($this->listeners[$hookName], $this->listenerCache[$hookName]);
             } else {
                 foreach ($this->listeners[$hookName] as $priorityKey => $group) {
-                    $filtered = array_values(
-                        array_filter($group, fn ($l) => $l['id'] !== $id),
+                    $filtered = \array_values(
+                        \array_filter($group, fn ($l) => $l['id'] !== $id),
                     );
 
                     if (empty($filtered)) {
@@ -178,7 +181,7 @@ abstract class ActionHookEvent
                 }
             }
 
-            $this->cacheDirty = true;
+            $this->dirtyHooks[$hookName] = true;
         }
 
         return $this;
@@ -192,9 +195,7 @@ abstract class ActionHookEvent
      */
     public function hasListeners(?string $hook = null, ?string $scope = null): bool
     {
-        if ($this->cacheDirty) {
-            $this->rebuildCache();
-        }
+        $this->ensureCacheUpToDate($hook);
 
         if ($hook === null) {
             return ! empty($this->listenerCache);
@@ -208,7 +209,7 @@ abstract class ActionHookEvent
             return true;
         }
 
-        return ! empty(array_filter(
+        return ! empty(\array_filter(
             $this->listenerCache[$hook],
             fn ($l) => $l['scope'] === null || $l['scope'] === $scope,
         ));
@@ -223,9 +224,7 @@ abstract class ActionHookEvent
      */
     public function getListeners(string $hook, ?string $scope = null): array
     {
-        if ($this->cacheDirty) {
-            $this->rebuildCache();
-        }
+        $this->ensureCacheUpToDate($hook);
 
         $listeners = $this->listenerCache[$hook] ?? [];
 
@@ -233,7 +232,7 @@ abstract class ActionHookEvent
             return $listeners;
         }
 
-        return array_values(array_filter(
+        return \array_values(\array_filter(
             $listeners,
             fn ($l) => $l['scope'] === null || $l['scope'] === $scope,
         ));
@@ -251,38 +250,89 @@ abstract class ActionHookEvent
             return count($this->getListeners($hook, $scope));
         }
 
-        if ($this->cacheDirty) {
-            $this->rebuildCache();
-        }
+        $this->ensureCacheUpToDate(null);
 
-        return (int) array_sum(array_map('count', $this->listenerCache));
+        return (int) \array_sum(\array_map('\count', $this->listenerCache));
     }
 
     /**
-     * Rebuild sorted cache จาก raw listeners
+     * เรียก callback ของ listener พร้อมส่ง arguments ที่ถูกต้อง
+     *
+     * @param  array<string, mixed>  $listener  ListenerData
+     * @param  array<mixed>  $args  arguments ปัจจุบัน
+     * @return mixed ผลลัพธ์จาก callback
+     */
+    protected function invokeListener(array $listener, array $args): mixed
+    {
+        $count = \is_int($listener['arguments'] ?? null) ? \max(1, $listener['arguments']) : 1;
+        $parameters = \array_slice($args, 0, $count);
+
+        /** @var mixed $callback */
+        $callback = $listener['callback'] ?? null;
+
+        return \is_callable($callback) ? \call_user_func_array($callback, $parameters) : null;
+    }
+
+    /**
+     * Ensure cache is up-to-date สำหรับ hook ที่ระบุ (หรือทุก hook ถ้า null)
+     *
+     * @param  string|null  $hook  hook ที่ต้องการ หรือ null สำหรับทุก hook
+     */
+    protected function ensureCacheUpToDate(?string $hook): void
+    {
+        if ($this->dirtyHooks === []) {
+            return;
+        }
+
+        if ($hook !== null && isset($this->dirtyHooks[$hook])) {
+            $this->rebuildCacheForHook($hook);
+            unset($this->dirtyHooks[$hook]);
+
+            return;
+        }
+
+        if ($hook === null) {
+            $this->rebuildCache();
+        }
+    }
+
+    /**
+     * Rebuild sorted cache สำหรับ hook เดียว
+     */
+    protected function rebuildCacheForHook(string $hook): void
+    {
+        if (! isset($this->listeners[$hook])) {
+            unset($this->listenerCache[$hook]);
+
+            return;
+        }
+
+        $priorities = $this->listeners[$hook];
+        ksort($priorities);
+
+        $flat = [];
+        foreach ($priorities as $group) {
+            foreach ($group as $listener) {
+                $flat[] = $listener;
+            }
+        }
+
+        $this->listenerCache[$hook] = $flat;
+    }
+
+    /**
+     * Rebuild sorted cache จาก raw listeners (ทุก dirty hooks)
      *
      * - เรียง priority ascending (น้อย → มาก) — priority ต่ำ รันก่อน
-     * - Flatten [priority][index] → flat list เพื่อ iteration ง่ายขึ้น
-     * - เรียกอัตโนมัติเมื่อ cacheDirty=true
+     * - เรียกอัตโนมัติเมื่อมี dirtyHooks และ hook=null ถูกถาม
      */
     protected function rebuildCache(): void
     {
-        $this->listenerCache = [];
-
-        foreach ($this->listeners as $hookName => $priorities) {
-            ksort($priorities);
-
-            $flat = [];
-            foreach ($priorities as $group) {
-                foreach ($group as $listener) {
-                    $flat[] = $listener;
-                }
-            }
-
-            $this->listenerCache[$hookName] = $flat;
+        foreach ($this->dirtyHooks as $hookName => $_) {
+            $this->rebuildCacheForHook($hookName);
         }
 
-        $this->cacheDirty = false;
+        $this->dirtyHooks = [];
     }
 
     /**
@@ -299,42 +349,65 @@ abstract class ActionHookEvent
     /**
      * Resolve callback ให้อยู่ในรูปที่ call_user_func_array รับได้
      *
-     * รองรับ:
-     *  - Closure
-     *  - callable (function name, [object, method], [class, method])
-     *  - 'ClassName@method' string — resolve instance ผ่าน IoC container
-     *  - [ClassName::class, 'method'] array — resolve instance ผ่าน IoC container
+     * ลำดับการตรวจสอบ:
+     *  1. Closure                — คืนตรง
+     *  2. 'ClassName@method'     — resolve instance ผ่าน IoC แล้วคืน [instance, method]
+     *  3. [Class, method]        — resolve instance ผ่าน IoC แล้วคืน [instance, method]
+     *  4. [object, method]       — มี instance แล้ว คืนตรง
+     *  5. callable อื่นๆ         — function name, static method — คืนตรง
+     *
+     * หมายเหตุ: ['ClassName', 'method'] ต้องผ่าน IoC (ไม่ใช่ is_callable early-return)
+     * เพื่อให้ได้ instance ที่ถูก inject dependencies อย่างถูกต้อง
      *
      * @throws InvalidArgumentException ถ้า callback ไม่ถูกต้อง หรือ method ไม่มีอยู่
      */
     protected function resolveCallback(callable|Closure|array|string $callback): callable
     {
-        if ($callback instanceof Closure || is_callable($callback)) {
+        // 1. Closure — คืนตรงโดยไม่ต้องผ่าน IoC
+        if ($callback instanceof Closure) {
             return $callback;
         }
 
         $container = $this->app ?? app();
 
-        if (is_string($callback) && str_contains($callback, '@')) {
-            [$class, $method] = explode('@', $callback, 2);
+        // 2. 'ClassName@method' — resolve ผ่าน IoC
+        if (\is_string($callback) && \str_contains($callback, '@')) {
+            [$class, $method] = \explode('@', $callback, 2);
             $instance = $container->make($class);
 
-            if (! method_exists($instance, $method)) {
+            if (! \method_exists($instance, $method)) {
                 throw new InvalidArgumentException("Method [{$class}@{$method}] does not exist.");
             }
 
             return [$instance, $method];
         }
 
-        if (is_array($callback) && count($callback) === 2) {
+        // 3 & 4. [ClassName, method] หรือ [object, method]
+        if (\is_array($callback) && \count($callback) === 2) {
             [$classOrObject, $method] = $callback;
-            $instance = is_object($classOrObject) ? $classOrObject : $container->make($classOrObject);
 
-            if (! method_exists($instance, $method)) {
-                throw new InvalidArgumentException("Method [{$method}] does not exist on class.");
+            // [object, method] — มี instance แล้ว ไม่ต้อง resolve
+            if (\is_object($classOrObject)) {
+                if (! \method_exists($classOrObject, $method)) {
+                    throw new InvalidArgumentException("Method [{$method}] does not exist on object.");
+                }
+
+                return [$classOrObject, $method];
+            }
+
+            // [ClassName, method] — resolve instance ผ่าน IoC (รองรับ non-static + DI)
+            $instance = $container->make((string) $classOrObject);
+
+            if (! \method_exists($instance, $method)) {
+                throw new InvalidArgumentException("Method [{$classOrObject}@{$method}] does not exist.");
             }
 
             return [$instance, $method];
+        }
+
+        // 5. callable อื่นๆ — function name, static callable
+        if (\is_callable($callback)) {
+            return $callback;
         }
 
         throw new InvalidArgumentException(

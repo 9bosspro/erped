@@ -27,4 +27,21 @@ return [
 
     // Threshold สำหรับ slow query logging (milliseconds)
     'slow_query_threshold_ms' => (int) env('SLOW_QUERY_THRESHOLD_MS', 100),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Proxy Allowed Endpoints
+    |--------------------------------------------------------------------------
+    |
+    | รายการ endpoint prefix ที่อนุญาตให้ BFF proxy ส่งต่อไปยัง backend
+    | ระบุเป็น prefix: 'users' จะอนุญาต users, users/123, users/list
+    | endpoint ที่ไม่อยู่ในรายการจะถูกปฏิเสธด้วย 403
+    |
+    */
+    'proxy_allowed_endpoints' => [
+        'users',
+        'profile',
+        'settings',
+        'dashboard',
+    ],
 ];

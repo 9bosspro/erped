@@ -187,7 +187,8 @@ final class SetOperator
                 $row = array_merge($row, array_fill(0, count($headers) - count($row), null));
             }
 
-            $item = array_combine($headers, $row);
+            $stringHeaders = array_map(fn ($v) => is_scalar($v) ? (string) $v : '', $headers);
+            $item = array_combine($stringHeaders, $row);
             if ($item === false) {
                 continue;
             }

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\File;
 use InvalidArgumentException;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use SplFileInfo;
 
 /**
  * FileSystemOperator — จัดการ file system (directory, copy, scan)
@@ -70,6 +71,7 @@ final class FileSystemOperator
 
         $files = [];
         foreach ($iterator as $fileInfo) {
+            /** @var SplFileInfo $fileInfo */
             if ($fileInfo->isFile()) {
                 $files[] = $fileInfo->getPathname();
             }

@@ -10,6 +10,7 @@ use DeviceDetector\ClientHints;
 use DeviceDetector\DeviceDetector;
 use DeviceDetector\Parser\Device\AbstractDeviceParser;
 use Illuminate\Http\Request;
+use Ramsey\Uuid\Uuid;
 use RuntimeException;
 
 /**
@@ -51,6 +52,8 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
     /** @var array<string, mixed> ข้อมูล identity เพิ่มเติมจาก ClientHints + request */
     private array $parsedIdentity = [];
 
+    private ?string $currentRequestId = null;
+
     /**
      * สร้าง server-side fingerprint จาก stable signals
      *
@@ -65,18 +68,23 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      *
      * ใช้ HMAC-SHA256 + app.key เพื่อป้องกัน rainbow table attack
      *
-     * @param  Request  $request  HTTP request ปัจจุบัน
+     * @param  Request|null  $request  HTTP request ปัจจุบัน (ถ้า null จะใช้ current request)
      * @return string HMAC-SHA256 fingerprint hash (hex, 64 chars)
      *
      * @throws RuntimeException ถ้า APP_KEY ยังไม่ได้ตั้งค่า (ป้องกัน HMAC key ว่าง)
      */
-    public function fingerprint(Request $request): string
+    public function fingerprint(?Request $request = null): string
     {
         if (! $this->parsed) {
             $this->fromRequest($request);
         }
 
-        $appKey = config('app.key', '');
+        // หาก $request ยังคงเป็น null (กรณี fromRequest ถูกเรียกก่อนหน้าแล้ว)
+        // ให้ใช้ helper request() เพื่อดึง instance ปัจจุบัน
+        $request = $request ?? request();
+
+        $appKeyRaw = config('app.key', '');
+        $appKey = \is_string($appKeyRaw) ? $appKeyRaw : '';
         if ($appKey === '') {
             throw new RuntimeException(
                 'APP_KEY is not set. Cannot generate a secure fingerprint without an HMAC key.',
@@ -86,17 +94,17 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $id = $this->parsedIdentity;
 
         // Brand names จาก Sec-CH-UA — ตัด version ทิ้ง, sort เพื่อ stability
-        $brandNames = array_keys($id['ch_brand_list'] ?? []);
+        $brandNames = array_keys((array) ($id['ch_brand_list'] ?? []));
         sort($brandNames);
 
         $components = [
             // ── Browser (parsed) ─────────────────────────────────────────
             'browser' => $this->browser() ?? '',
             'browser_type' => $this->clientType() ?? '',
-            'browser_ver_maj' => explode('.', $this->browserVersion() ?? '')[0],
+            'browser_ver_maj' => explode('.', (string) ($this->browserVersion() ?? ''))[0],
             // ── OS / Device ───────────────────────────────────────────────
             'os' => $this->os() ?? '',
-            'os_ver_major' => explode('.', $this->osVersion() ?? '')[0],
+            'os_ver_major' => explode('.', (string) ($this->osVersion() ?? ''))[0],
             'device' => $this->device(),
             'brand' => $this->brand() ?? '',
             'model' => $this->model() ?? '',
@@ -105,15 +113,25 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
             'accept_enc' => (string) $request->header('Accept-Encoding', ''),
             // ── Client Hints — stable signals ────────────────────────────
             'ch_brands' => implode(',', $brandNames),
-            'ch_platform' => $id['ch_platform'] ?? '',
+            'ch_platform' => (static function (mixed $v): string {
+                return is_scalar($v) ? (string) $v : '';
+            })($id['ch_platform'] ?? ''),
             'ch_mobile' => ($id['ch_mobile'] ?? false) ? '1' : '0',
-            'ch_arch' => $id['ch_arch'] ?? '',
-            'ch_bitness' => $id['ch_bitness'] ?? '',
-            'ch_model' => $id['ch_model'] ?? '',
+            'ch_arch' => (static function (mixed $v): string {
+                return is_scalar($v) ? (string) $v : '';
+            })($id['ch_arch'] ?? ''),
+            'ch_bitness' => (static function (mixed $v): string {
+                return is_scalar($v) ? (string) $v : '';
+            })($id['ch_bitness'] ?? ''),
+            'ch_model' => (static function (mixed $v): string {
+                return is_scalar($v) ? (string) $v : '';
+            })($id['ch_model'] ?? ''),
             'ch_wow64' => ($id['ch_wow64'] ?? false) ? '1' : '0',
-            'ch_form' => implode(',', $id['ch_form_factors'] ?? []),
+            'ch_form' => implode(',', array_map(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '', (array) ($id['ch_form_factors'] ?? []))),
             // ── Native App identity ───────────────────────────────────────
-            'app_id' => $id['ch_app'] ?? '',
+            'app_id' => (static function (mixed $v): string {
+                return is_scalar($v) ? (string) $v : '';
+            })($id['ch_app'] ?? ''),
         ];
 
         $payload = json_encode($components, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
@@ -135,11 +153,12 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      *  - Form Factor (Sec-CH-UA-Form-Factors)
      *  - isMobile / isDesktop / isTouchEnabled จาก DeviceDetector
      *
-     * @param  Request  $request  HTTP request ปัจจุบัน
+     * @param  Request|null  $request  HTTP request ปัจจุบัน (ถ้า null จะใช้ current request)
      * @return static instance ที่ parse แล้ว (fluent)
      */
-    public function fromRequest(Request $request): static
+    public function fromRequest(?Request $request = null): static
     {
+        $request = $request ?? request();
         $ua = $request->userAgent() ?? '';
         $chPlatform = $request->header('Sec-CH-UA-Platform', '');
         $chBrands = $request->header('Sec-CH-UA', '');
@@ -161,8 +180,10 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $this->detector->setCache(new LaravelCache);
         $this->detector->parse();
 
-        $this->parsedClient = $this->detector->getClient() ?? [];
-        $this->parsedOs = $this->detector->getOs() ?? [];
+        $clientData = $this->detector->getClient();
+        $this->parsedClient = is_array($clientData) ? $clientData : [];
+        $osData = $this->detector->getOs();
+        $this->parsedOs = is_array($osData) ? $osData : [];
 
         $this->parsedIdentity = [
             // ── Cache key (ใช้ตรวจ invalidation) ───────────────────
@@ -196,6 +217,21 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         return $this;
     }
 
+    public function getRequestId(?Request $request = null): string
+    {
+        $request = $request ?? request();
+        if ($this->currentRequestId === null) {
+            $fingerprint = $this->fingerprint($request);
+            $random = Uuid::uuid7()->getHex()->toString();
+            $ip = $request->ip() ?? '';
+            $appKey = \is_string(config('app.key')) ? (string) config('app.key') : '';
+            $sessionid = hash_hmac('sha256', $fingerprint.$ip.microtime(true).$random, $appKey);
+            $this->currentRequestId = $sessionid;
+        }
+
+        return $this->currentRequestId;
+    }
+
     // ─── Quick accessors ────────────────────────────────────────
 
     /**
@@ -205,7 +241,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
     {
         $this->ensureParsed();
 
-        return $this->parsedIdentity['is_bot'];
+        return (bool) ($this->parsedIdentity['is_bot'] ?? false);
     }
 
     /**
@@ -218,7 +254,13 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $this->ensureParsed();
 
         // ใช้ cached is_bot แทนการเรียก detector->isBot() ซ้ำ
-        return $this->parsedIdentity['is_bot'] ? $this->detector->getBot() : null;
+        if (! (bool) ($this->parsedIdentity['is_bot'] ?? false)) {
+            return null;
+        }
+
+        $botData = $this->detector->getBot();
+
+        return is_array($botData) ? $botData : null;
     }
 
     /**
@@ -344,7 +386,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
     {
         $this->ensureParsed();
 
-        return $this->parsedIdentity['is_mobile'];
+        return (bool) ($this->parsedIdentity['is_mobile'] ?? false);
     }
 
     /**
@@ -354,7 +396,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
     {
         $this->ensureParsed();
 
-        return $this->parsedIdentity['is_desktop'];
+        return (bool) ($this->parsedIdentity['is_desktop'] ?? false);
     }
 
     /**
@@ -364,7 +406,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
     {
         $this->ensureParsed();
 
-        return $this->parsedIdentity['is_touch'];
+        return (bool) ($this->parsedIdentity['is_touch'] ?? false);
     }
 
     /**
@@ -434,11 +476,12 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      *
      * รวม fingerprint + identity + risk signals ใน 1 pass (ไม่ parse ซ้ำ)
      *
-     * @param  Request  $request  HTTP request ปัจจุบัน
+     * @param  Request|null  $request  HTTP request ปัจจุบัน (ถ้า null จะใช้ current request)
      * @return array<string, mixed> ผลวิเคราะห์ครบทุกมิติ รวม risk_score
      */
-    public function analyze(Request $request): array
+    public function analyze(?Request $request = null): array
     {
+        $request = $request ?? request();
         $fp = $this->fingerprint($request);
         $riskSignals = $this->detectRiskSignals($request);
         $id = $this->parsedIdentity;
@@ -501,10 +544,11 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $signals = [];
 
         // ใช้ cached is_bot ป้องกัน double detection call
-        $isBot = $this->parsedIdentity['is_bot'];
+        $isBot = (bool) ($this->parsedIdentity['is_bot'] ?? false);
 
         if ($isBot) {
-            $botName = $this->detector->getBot()['name'] ?? 'unknown bot';
+            $botData = $this->detector->getBot();
+            $botName = is_array($botData) ? ($botData['name'] ?? 'unknown bot') : 'unknown bot';
             $signals[] = ['type' => 'bot_detected', 'level' => 'high', 'detail' => $botName];
         }
 
@@ -537,7 +581,8 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
             $signals[] = [
                 'type' => 'outdated_browser',
                 'level' => 'medium',
-                'detail' => ($this->parsedClient['name'] ?? '').' '.($this->parsedClient['version'] ?? ''),
+                'detail' => (static fn (mixed $v): string => is_scalar($v) ? (string) $v : '')($this->parsedClient['name'] ?? '')
+                    .' '.(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '')($this->parsedClient['version'] ?? ''),
             ];
         }
 
@@ -545,7 +590,8 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $forwardedFor = $request->header('X-Forwarded-For');
         if ($forwardedFor !== null) {
             $hopCount = count(array_filter(array_map('trim', explode(',', $forwardedFor))));
-            $maxHops = (int) config('services.fingerprint.max_proxy_hops', 3);
+            $maxHopsRaw = config('services.fingerprint.max_proxy_hops', 3);
+            $maxHops = is_int($maxHopsRaw) ? $maxHopsRaw : (is_numeric($maxHopsRaw) ? (int) $maxHopsRaw : 3);
 
             if ($hopCount > $maxHops) {
                 $signals[] = ['type' => 'excessive_proxy_hops', 'level' => 'medium', 'detail' => "hops: {$hopCount}"];
@@ -584,19 +630,23 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      */
     protected function isOutdatedBrowser(): bool
     {
-        $version = $this->parsedClient['version'] ?? '0';
+        $versionRaw = $this->parsedClient['version'] ?? '0';
+        $version = is_scalar($versionRaw) ? (string) $versionRaw : '0';
         $majorVersion = (int) explode('.', $version)[0];
 
-        $thresholds = config('services.fingerprint.browser_thresholds', [
+        $thresholdsRaw = config('services.fingerprint.browser_thresholds', [
             'chrome' => 120,
             'firefox' => 115,
             'safari' => 17,
             'edge' => 120,
         ]);
+        $thresholds = is_array($thresholdsRaw) ? $thresholdsRaw : [];
 
-        $browserName = strtolower($this->parsedClient['name'] ?? '');
+        $nameRaw = $this->parsedClient['name'] ?? '';
+        $browserName = strtolower(is_scalar($nameRaw) ? (string) $nameRaw : '');
 
-        $minVersion = $thresholds[$browserName] ?? null;
+        $minVersionRaw = $thresholds[$browserName] ?? null;
+        $minVersion = is_int($minVersionRaw) ? $minVersionRaw : (is_numeric($minVersionRaw) ? (int) $minVersionRaw : null);
 
         return $minVersion !== null && $majorVersion > 0 && $majorVersion < $minVersion;
     }
@@ -612,12 +662,15 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
      */
     protected function calculateScore(array $signals): int
     {
-        $weights = config('services.fingerprint.risk_weights', ['high' => 30, 'medium' => 15, 'low' => 5]);
-        $maxScore = (int) config('services.fingerprint.max_risk_score', 100);
+        $weightsRaw = config('services.fingerprint.risk_weights', ['high' => 30, 'medium' => 15, 'low' => 5]);
+        $weights = is_array($weightsRaw) ? $weightsRaw : ['high' => 30, 'medium' => 15, 'low' => 5];
+        $maxScoreRaw = config('services.fingerprint.max_risk_score', 100);
+        $maxScore = is_int($maxScoreRaw) ? $maxScoreRaw : (is_numeric($maxScoreRaw) ? (int) $maxScoreRaw : 100);
 
         $score = 0;
         foreach ($signals as $signal) {
-            $score += (int) ($weights[$signal['level']] ?? 0);
+            $weightValue = $weights[$signal['level']] ?? 0;
+            $score += is_int($weightValue) ? $weightValue : (is_numeric($weightValue) ? (int) $weightValue : 0);
         }
 
         return min($score, $maxScore);

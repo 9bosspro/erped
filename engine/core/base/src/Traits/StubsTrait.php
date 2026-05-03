@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Core\Base\Traits;
 
-use Core\Base\Support\StubResult;
+use Core\Base\Support\Helpers\Stub\StubResult;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
@@ -40,6 +40,8 @@ use RuntimeException;
  */
 trait StubsTrait
 {
+    use PathResolverTrait;
+
     /** @var array<string, string>  In-memory cache สำหรับ stub content */
     private static array $stubCache = [];
     // ─────────────────────────────────────────────────────────────────
@@ -930,16 +932,5 @@ trait StubsTrait
         }
 
         return $safe;
-    }
-
-    /**
-     * Normalize path separators ให้ตรงกับ OS ปัจจุบัน
-     */
-    private function normalizePath(string $path): string
-    {
-        return rtrim(
-            str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path),
-            DIRECTORY_SEPARATOR,
-        ) ?: $path;
     }
 }

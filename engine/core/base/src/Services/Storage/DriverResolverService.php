@@ -7,6 +7,7 @@ namespace Core\Base\Services\Storage;
 use App\Models\StorageFiles;
 use Core\Base\Contracts\FileStorage\StorageDriverInterface;
 use Core\Base\Factories\FileStoreFactory;
+use Core\Base\Services\Storage\Contracts\DriverResolverServiceInterface;
 
 /**
  * DriverResolverService — Resolve และ cache storage driver instance
@@ -16,7 +17,7 @@ use Core\Base\Factories\FileStoreFactory;
  *
  * ใช้ in-memory cache เพื่อไม่สร้าง driver ซ้ำใน request เดียวกัน
  */
-class DriverResolverService
+class DriverResolverService implements DriverResolverServiceInterface
 {
     /** @var array<string, StorageDriverInterface> cache ของ driver ที่ resolve แล้ว */
     private array $cache = [];
@@ -44,8 +45,9 @@ class DriverResolverService
      */
     public function forFile(StorageFiles $file): StorageDriverInterface
     {
+        $defaultDisk = config('filesystems.default', 'minio');
         $diskName = $file->storageDisk?->disk_name
-            ?? config('filesystems.default', 'minio');
+            ?? (is_string($defaultDisk) ? $defaultDisk : 'minio');
 
         return $this->forDisk($diskName);
     }
@@ -57,6 +59,8 @@ class DriverResolverService
      */
     public function default(): StorageDriverInterface
     {
-        return $this->forDisk(config('filesystems.default', 'minio'));
+        $default = config('filesystems.default', 'minio');
+
+        return $this->forDisk(is_string($default) ? $default : 'minio');
     }
 }

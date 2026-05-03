@@ -108,7 +108,7 @@ final class ArrayValidator
             return empty($value);
         }
 
-        if ($this->isSupportCollection($value)) {
+        if ($value instanceof BaseCollection || $value instanceof EloquentCollection) {
             return $value->isEmpty();
         }
 

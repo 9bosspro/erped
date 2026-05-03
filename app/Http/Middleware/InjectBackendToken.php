@@ -4,23 +4,26 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Services\BackendApi\TokenManager;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * InjectBackendToken — เพิ่ม Backend access token เข้า Inertia shared props
+ * InjectBackendToken — เพิ่ม Backend access token เข้า request attributes
  *
- * ให้ React components เข้าถึง backend token สำหรับ client-side API calls
- * Token จะถูกส่งผ่าน Inertia shared props (ไม่ exposed ใน URL/cookie)
+ * ให้ middleware และ controllers ถัดไปเข้าถึง token ผ่าน request attributes
+ * แทนที่จะเรียก session() โดยตรง — ลด coupling กับ session key names
  */
 class InjectBackendToken
 {
+    public function __construct(
+        private readonly TokenManager $tokenManager,
+    ) {}
+
     public function handle(Request $request, Closure $next): Response
     {
-        // เก็บ backend token ไว้ใน request attributes
-        // สำหรับ HandleInertiaRequests middleware ดึงไปใส่ shared props
-        $request->attributes->set('backend_token', session('backend_access_token'));
+        $request->attributes->set('backend_token', $this->tokenManager->getToken());
 
         return $next($request);
     }

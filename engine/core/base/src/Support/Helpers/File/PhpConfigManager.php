@@ -74,7 +74,8 @@ final class PhpConfigManager
         $contents = File::get($path);
         $escapedKey = preg_quote($key, '/');
         $pattern = "/^{$escapedKey}=.*$/m";
-        $replacement = "{$key}={$delim}{$newValue}{$delim}";
+        $newValueStr = is_scalar($newValue) ? (string) $newValue : '';
+        $replacement = "{$key}={$delim}{$newValueStr}{$delim}";
 
         if (preg_match($pattern, $contents)) {
             $newContents = preg_replace($pattern, $replacement, $contents);
@@ -82,17 +83,17 @@ final class PhpConfigManager
             $newContents = rtrim($contents).PHP_EOL.$replacement.PHP_EOL;
         }
 
-        File::put($path, $newContents);
+        File::put($path, (string) $newContents);
     }
 
     /**
      * อ่านค่า key จาก .env file โดยตรง (bypass config cache)
      *
      * @param  string  $key  ชื่อ environment variable
-     * @param  mixed  $default  ค่า default ถ้าไม่พบ
+     * @param  string|null  $default  ค่า default ถ้าไม่พบ
      * @return string|null ค่าที่อ่านได้
      */
-    public function getDotEnv(string $key, mixed $default = null): ?string
+    public function getDotEnv(string $key, ?string $default = null): ?string
     {
         if (! preg_match('/^[A-Z][A-Z0-9_]*$/i', $key)) {
             return $default;
@@ -104,7 +105,7 @@ final class PhpConfigManager
             return $default;
         }
 
-        $contents = File::get($path);
+        $contents = (string) File::get($path);
         $escapedKey = preg_quote($key, '/');
 
         if (preg_match("/^{$escapedKey}=(.*)$/m", $contents, $matches)) {
@@ -124,14 +125,18 @@ final class PhpConfigManager
         static $iniAll = null;
 
         if ($iniAll === null) {
+            /** @var array<string, array{access: int}>|false $iniAll */
             $iniAll = function_exists('ini_get_all') ? ini_get_all() : false;
         }
 
-        if (isset($iniAll[$setting]['access']) &&
-            (INI_ALL === ($iniAll[$setting]['access'] & 7) ||
-             INI_USER === ($iniAll[$setting]['access'] & 7))
-        ) {
-            return true;
+        if (is_array($iniAll) && isset($iniAll[$setting]) && is_array($iniAll[$setting]) && isset($iniAll[$setting]['access'])) {
+            $access = $iniAll[$setting]['access'];
+            if (is_int($access) && (
+                (INI_ALL === ($access & 7)) ||
+                (INI_USER === ($access & 7))
+            )) {
+                return true;
+            }
         }
 
         return ! is_array($iniAll);
@@ -143,7 +148,7 @@ final class PhpConfigManager
     public function iniSet(string $setting, mixed $value): void
     {
         if ($this->isIniValueChangeable($setting)) {
-            ini_set($setting, (string) $value);
+            ini_set($setting, is_scalar($value) ? (string) $value : '');
         }
     }
 

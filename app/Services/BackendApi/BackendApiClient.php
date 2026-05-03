@@ -7,7 +7,6 @@ namespace App\Services\BackendApi;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 /**
  * BackendApiClient — HTTP Client สำหรับเรียก Backend API (pppportal)
@@ -30,10 +29,17 @@ class BackendApiClient
 
     public function __construct()
     {
-        $this->baseUrl = rtrim(config('backend.api_url'), '/');
-        $this->timeout = (int) config('backend.timeout', 30);
-        $this->retryTimes = (int) config('backend.retry_times', 2);
-        $this->retryDelay = (int) config('backend.retry_delay', 500);
+        $apiUrl = config('backend.api_url', '');
+        $this->baseUrl = rtrim(\is_string($apiUrl) ? $apiUrl : '', '/');
+
+        $timeout = config('backend.timeout', 30);
+        $this->timeout = \is_int($timeout) ? $timeout : 30;
+
+        $retryTimes = config('backend.retry_times', 2);
+        $this->retryTimes = \is_int($retryTimes) ? $retryTimes : 2;
+
+        $retryDelay = config('backend.retry_delay', 500);
+        $this->retryDelay = \is_int($retryDelay) ? $retryDelay : 500;
     }
 
     /**
@@ -100,6 +106,8 @@ class BackendApiClient
 
     /**
      * GET request ไปยัง Backend API
+     *
+     * @param array<string, mixed> $query
      */
     public function get(string $token, string $endpoint, array $query = []): Response
     {
@@ -109,6 +117,8 @@ class BackendApiClient
 
     /**
      * POST request ไปยัง Backend API
+     *
+     * @param array<string, mixed> $data
      */
     public function post(string $token, string $endpoint, array $data = []): Response
     {
@@ -118,6 +128,8 @@ class BackendApiClient
 
     /**
      * PUT request ไปยัง Backend API
+     *
+     * @param array<string, mixed> $data
      */
     public function put(string $token, string $endpoint, array $data = []): Response
     {
@@ -127,6 +139,8 @@ class BackendApiClient
 
     /**
      * DELETE request ไปยัง Backend API
+     *
+     * @param array<string, mixed> $data
      */
     public function delete(string $token, string $endpoint, array $data = []): Response
     {
@@ -143,10 +157,9 @@ class BackendApiClient
     {
         return Http::baseUrl($this->baseUrl)
             ->timeout($this->timeout)
-            ->retry($this->retryTimes, $this->retryDelay, function (\Exception $e) {
-                // Retry เฉพาะ server errors (5xx) เท่านั้น
+            ->retry($this->retryTimes, $this->retryDelay, function (\Throwable $e): bool {
                 return $e instanceof \Illuminate\Http\Client\RequestException
-                    && $e->response?->serverError();
+                    && $e->response->serverError();
             })
             ->acceptJson()
             ->withHeaders([

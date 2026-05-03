@@ -30,8 +30,13 @@ class FileStoreFactory
      */
     public static function make(string $disk): StorageDriverInterface
     {
-        $driver = config("filesystems.disks.{$disk}.driver")
-            ?? throw new InvalidArgumentException("ไม่พบ disk '{$disk}' ใน config/filesystems.php");
+        $driverValue = config("filesystems.disks.{$disk}.driver");
+
+        if ($driverValue === null) {
+            throw new InvalidArgumentException("ไม่พบ disk '{$disk}' ใน config/filesystems.php");
+        }
+
+        $driver = is_string($driverValue) ? $driverValue : (is_scalar($driverValue) ? (string) $driverValue : '');
 
         $adapterClass = static::$driverMap[$driver]
             ?? throw new InvalidArgumentException("ไม่รองรับ driver '{$driver}' (disk: {$disk})");

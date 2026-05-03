@@ -8,6 +8,7 @@ use Core\Base\Events\Storage\ChunkedUploadCompleted;
 use Core\Base\Events\Storage\FileUploadCompleted;
 use Core\Base\Events\Storage\FileUploadFailed;
 use Core\Base\Events\Storage\FileUploadStarted;
+use Illuminate\Events\Dispatcher;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -81,7 +82,12 @@ class LogUploadActivity
     /**
      * Register the listeners for the subscriber.
      */
-    public function subscribe($events): array
+    /**
+     * ลงทะเบียน listeners สำหรับ subscriber
+     *
+     * @return array<class-string, string>
+     */
+    public function subscribe(Dispatcher $events): array
     {
         return [
             FileUploadStarted::class => 'handleStarted',

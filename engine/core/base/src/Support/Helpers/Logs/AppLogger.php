@@ -83,15 +83,26 @@ final class AppLogger implements AppLoggerInterface
     // ─── Sensitive key patterns ──────────────────────────────────────
 
     /** @var string[] คำที่ใช้ตรวจ sensitive key (case-insensitive, partial match) */
-    private const SENSITIVE_PATTERNS = [
-        'password', 'passwd', 'secret', 'token', 'api_key', 'apikey',
-        'private_key', 'signing_key', 'encryption_key', 'hmac_key', 'jwt_secret',
-        'pepper', 'passphrase', 'access_token', 'refresh_token', 'auth_token',
-        'credit_card', 'card_number', 'cvv', 'cvc', 'pin', 'ssn', 'passport',
-    ];
+    private array $sensitivePatterns = [];
 
     /** @var array<string, mixed> default context ที่ merge เข้าทุก log call */
     private array $defaultContext = [];
+
+    public function __construct()
+    {
+        $defaultPatterns = [
+            'password', 'passwd', 'secret', 'token', 'api_key', 'apikey',
+            'private_key', 'signing_key', 'encryption_key', 'hmac_key', 'jwt_secret',
+            'pepper', 'passphrase', 'access_token', 'refresh_token', 'auth_token',
+            'credit_card', 'card_number', 'cvv', 'cvc', 'pin', 'ssn', 'passport',
+        ];
+
+        // อนุญาตให้แก้ไขเพิ่มเติมผ่าน Config ได้
+        $customPatterns = config('logging.app_logger.sensitive_patterns', []);
+        $this->sensitivePatterns = is_array($customPatterns) && count($customPatterns) > 0
+            ? array_unique(array_merge($defaultPatterns, $customPatterns))
+            : $defaultPatterns;
+    }
 
     // ═══════════════════════════════════════════════════════════
     //  PSR-3 Log Levels
@@ -462,8 +473,8 @@ final class AppLogger implements AppLoggerInterface
      * // → ['email' => 'a@b.com', 'password' => '***']
      * ```
      *
-     * @param  array<string, mixed>  $data  ข้อมูลที่ต้องการ mask
-     * @return array<string, mixed> ข้อมูลที่ mask แล้ว
+     * @param  array<mixed>  $data  ข้อมูลที่ต้องการ mask
+     * @return array<mixed> ข้อมูลที่ mask แล้ว
      */
     public function mask(array $data): array
     {
@@ -489,12 +500,16 @@ final class AppLogger implements AppLoggerInterface
      */
     private function buildContext(array $extra = []): array
     {
-        return $this->mask(array_merge(
+        $merged = array_merge(
             $this->defaultContext,
             $this->requestContext(),
             $this->userContext(),
             $extra,
-        ));
+        );
+        /** @var array<string, mixed> $masked */
+        $masked = $this->mask($merged);
+
+        return $masked;
     }
 
     /**
@@ -513,12 +528,26 @@ final class AppLogger implements AppLoggerInterface
 
         try {
             $req = request();
+            $requestId = '';
+
+            // พยายามดึง Request ID จาก Device Fingerprint Service (Trace ID)
+            if (app()->bound('core.session.device_fingerprint')) {
+                try {
+                    $requestId = app('core.session.device_fingerprint')->getRequestId($req);
+                } catch (Throwable) {
+                    // Fallback to header if service fails
+                }
+            }
+
+            if ($requestId === '') {
+                $requestId = (string) $req->header('X-Request-ID', '');
+            }
 
             return array_filter([
                 'ip' => $req->ip(),
                 'method' => $req->method(),
                 'url' => $req->fullUrl(),
-                'request_id' => $req->header('X-Request-ID', '') ?: null,
+                'request_id' => $requestId ?: null,
                 'user_agent' => $req->userAgent() ?: null,
             ]);
         } catch (Throwable) {
@@ -601,7 +630,7 @@ final class AppLogger implements AppLoggerInterface
     {
         $keyLower = strtolower($key);
 
-        foreach (self::SENSITIVE_PATTERNS as $pattern) {
+        foreach ($this->sensitivePatterns as $pattern) {
             if (str_contains($keyLower, $pattern)) {
                 return true;
             }
@@ -616,9 +645,9 @@ final class AppLogger implements AppLoggerInterface
      */
     private function securityChannel(): LoggerInterface
     {
-        return $this->resolveChannel(
-            config('logging.security_channel', 'security'),
-        );
+        $channel = config('logging.security_channel', 'security');
+
+        return $this->resolveChannel(is_string($channel) ? $channel : 'security');
     }
 
     /**
@@ -627,9 +656,9 @@ final class AppLogger implements AppLoggerInterface
      */
     private function auditChannel(): LoggerInterface
     {
-        return $this->resolveChannel(
-            config('logging.audit_channel', 'audit'),
-        );
+        $channel = config('logging.audit_channel', 'audit');
+
+        return $this->resolveChannel(is_string($channel) ? $channel : 'audit');
     }
 
     /**
@@ -638,9 +667,9 @@ final class AppLogger implements AppLoggerInterface
      */
     private function performanceChannel(): LoggerInterface
     {
-        return $this->resolveChannel(
-            config('logging.performance_channel', 'performance'),
-        );
+        $channel = config('logging.performance_channel', 'performance');
+
+        return $this->resolveChannel(is_string($channel) ? $channel : 'performance');
     }
 
     /**
@@ -652,7 +681,9 @@ final class AppLogger implements AppLoggerInterface
         try {
             return Log::channel($channel);
         } catch (Throwable) {
-            return Log::channel(config('logging.default', 'stack'));
+            $default = config('logging.default', 'stack');
+
+            return Log::channel(is_string($default) ? $default : 'stack');
         }
     }
 }

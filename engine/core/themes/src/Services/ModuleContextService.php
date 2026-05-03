@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Core\Themes\Services;
 
+use Core\Themes\Services\Contracts\ModuleContextServiceInterface;
 use Hexadog\ThemesManager\Facades\ThemesManager;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
@@ -22,18 +23,18 @@ use Nwidart\Modules\Facades\Module;
  *   - $processedModules  : modules ที่ register view paths แล้ว
  *   - $allModules        : cache Module::all() ต่อ request
  */
-final class ModuleContextService
+final class ModuleContextService implements ModuleContextServiceInterface
 {
     /** cache current module ต่อ request — false = ยังไม่ได้ resolve */
     private string|null|false $moduleCache = false;
 
-    /** themes ที่ ThemesManager::set() แล้ว */
+    /** @var string[] themes ที่ ThemesManager::set() แล้ว */
     private array $activatedThemes = [];
 
-    /** modules ที่ register view paths แล้ว */
+    /** @var string[] modules ที่ register view paths แล้ว */
     private array $processedModules = [];
 
-    /** cache Module::all() ต่อ request */
+    /** @var array<\Nwidart\Modules\Laravel\Module>|null cache Module::all() ต่อ request */
     private ?array $allModules = null;
 
     // ─────────────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ final class ModuleContextService
 
         // 1. ตรวจจาก Controller namespace
         $action = $route->getAction('controller');
-        if ($action) {
+        if (\is_string($action) && $action !== '') {
             $name = $this->detectFromController($action);
             if ($name && $this->isModuleEnabled($name)) {
                 return $name;

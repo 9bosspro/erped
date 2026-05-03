@@ -12,6 +12,8 @@ use Core\Base\Exceptions\Storage\FileNotDeletedException;
 use Core\Base\Exceptions\Storage\FileNotFoundException;
 use Core\Base\Repositories\Files\Interfaces\StorageDiskInterface;
 use Core\Base\Repositories\Files\Interfaces\StorageFileInterface;
+use Core\Base\Services\Storage\Contracts\DriverResolverServiceInterface;
+use Core\Base\Services\Storage\Contracts\FileStorageServiceInterface;
 use Engine\Modules\Files\Actions\DeleteFileAction;
 use Engine\Modules\Files\Actions\DeleteForceFileAction;
 use Engine\Modules\Files\Actions\UpdateUploadFileAction;
@@ -44,13 +46,13 @@ use Throwable;
  * ⚠️ Stateless — ไม่มี mutable state หลัง construction
  * Dependency ทั้งหมด inject ผ่าน constructor
  */
-class FileStorageService
+class FileStorageService implements FileStorageServiceInterface
 {
     public function __construct(
         private readonly StorageFileInterface $storageFileDbRepository,
         private readonly StorageDiskInterface $storageDiskDbRepository,
         private readonly UploadFileAction $uploadFileAction,
-        private readonly DriverResolverService $driverResolverService,
+        private readonly DriverResolverServiceInterface $driverResolverService,
         private readonly DeleteFileAction $deleteFileAction,
         private readonly DeleteForceFileAction $deleteForceFileAction,
         private readonly UpdateUploadFileAction $updateUploadFileAction,
@@ -87,6 +89,7 @@ class FileStorageService
         $perPage = (int) request()->query('per_page', (string) $perPage);
         $cacheKey = "storage_disks_page_{$perPage}_{$page}";
 
+        /** @var LengthAwarePaginator */
         return $this->storageDiskDbRepository->remember(
             cacheKey: $cacheKey,
             ttl: 3600, // แคชไว้ 1 ชั่วโมง
@@ -186,7 +189,8 @@ class FileStorageService
     /**
      * Async upload หลายไฟล์พร้อมกัน — dispatch Job แยกต่อไฟล์
      *
-     * ทุก upload รัน DB transaction เดียวกัน — ถ้าไฟล์ใดล้มเหลว rollback ทั้งหมด
+     * แต่ละไฟล์ upload อิสระต่อกัน — ไฟล์ใดล้มเหลวไม่กระทบไฟล์อื่น
+     * Job dispatched จะรัน AFTER transaction commit (afterCommit) เพื่อป้องกัน orphaned jobs
      *
      * @param  UploadedFile[]  $files  ไฟล์ที่ต้องการ upload
      * @param  string  $directory  directory ปลายทาง
@@ -202,18 +206,16 @@ class FileStorageService
     ): array {
         $results = [];
 
-        DB::transaction(function () use ($files, $disk, $directory, $userId, &$results): void {
-            foreach ($files as $file) {
-                if ($file instanceof UploadedFile) {
-                    $results[] = $this->uploadAsync(new UploadAsyncDTO(
-                        file: $file,
-                        directory: $directory,
-                        disk: $disk,
-                        userId: $userId,
-                    ));
-                }
+        foreach ($files as $file) {
+            if ($file instanceof UploadedFile) {
+                $results[] = $this->uploadAsync(new UploadAsyncDTO(
+                    file: $file,
+                    directory: $directory,
+                    disk: $disk,
+                    userId: $userId,
+                ));
             }
-        });
+        }
 
         return $results;
     }
@@ -381,9 +383,9 @@ class FileStorageService
      *
      * @param  string  $id  UUID ของไฟล์
      * @param  string|null  $name  ชื่อไฟล์สำหรับ download (null = ใช้ original_name)
-     * @return mixed StreamedResponse หรือ null ถ้าไม่พบ
+     * @return \Symfony\Component\HttpFoundation\Response|null StreamedResponse หรือ null ถ้าไม่พบ
      */
-    public function download(string $id, ?string $name = null): mixed
+    public function download(string $id, ?string $name = null): ?\Symfony\Component\HttpFoundation\Response
     {
         $file = $this->storageFileDbRepository->find($id);
 
@@ -443,15 +445,17 @@ class FileStorageService
             return null;
         }
 
-        $status = $file->metadata['upload_status'] ?? ($file->is_active ? 'completed' : 'pending');
+        $metadata = (array) $file->metadata;
+        $uploadStatus = $metadata['upload_status'] ?? ($file->is_active ? 'completed' : 'pending');
+        $status = is_scalar($uploadStatus) ? (string) $uploadStatus : 'pending';
 
         return [
-            'id' => $file->id,
+            'id' => (string) $file->id,
             'status' => $status,
-            'path' => ($status === 'completed') ? $file->path : null,
-            'error' => $file->metadata['error'] ?? null,
-            'trashed' => $file->trashed(),
-            'created_by' => $file->metadata['created_by'] ?? null,
+            'path' => ($status === 'completed') ? (string) $file->path : null,
+            'error' => isset($metadata['error']) && is_scalar($metadata['error']) ? (string) $metadata['error'] : null,
+            'trashed' => (bool) $file->trashed(),
+            'created_by' => isset($metadata['created_by']) && is_scalar($metadata['created_by']) ? (string) $metadata['created_by'] : null,
         ];
     }
 

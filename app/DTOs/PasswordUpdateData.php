@@ -22,9 +22,12 @@ readonly class PasswordUpdateData
      */
     public static function fromRequest(PasswordUpdateRequest $request): self
     {
+        /** @var array{current_password: string, password: string} $validated */
+        $validated = $request->validated();
+
         return new self(
-            currentPassword: $request->validated('current_password'),
-            password: $request->validated('password'),
+            currentPassword: $validated['current_password'],
+            password:        $validated['password'],
         );
     }
 }

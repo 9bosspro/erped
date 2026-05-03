@@ -45,7 +45,9 @@ final class MediaHelper
             ]);
 
             if ($response->successful()) {
-                return $response->json('items.0');
+                $data = $response->json('items.0');
+
+                return is_array($data) ? $data : null;
             }
 
             Log::warning('YouTube API request failed', ['status' => $response->status(), 'videoId' => $videoId]);

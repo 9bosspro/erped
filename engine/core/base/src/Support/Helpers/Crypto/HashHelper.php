@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Core\Base\Support\Helpers\Crypto;
 
+use Core\Base\Enums\ArgonLevel;
 use Core\Base\Support\Helpers\Crypto\Concerns\DataNormalization;
 use Core\Base\Support\Helpers\Crypto\Concerns\ParsesEncryptionKey;
 use Core\Base\Support\Helpers\Crypto\Contracts\HashHelperInterface;
@@ -54,14 +55,6 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
 {
     use DataNormalization, ParsesEncryptionKey;
 
-    public const string PWHASH_INTERACTIVE = 'interactive';
-
-    /** MODERATE — เหมาะสำหรับข้อมูล sensitive (~256 MB RAM, ~1 s) */
-    public const string PWHASH_MODERATE = 'moderate';
-
-    /** SENSITIVE — ความปลอดภัยสูงสุด (~1 GB RAM, ~5 s) */
-    public const string PWHASH_SENSITIVE = 'sensitive';
-
     private const DEFAULT_ALGO = 'sha3-256';
 
     private const HMAC_DEFAULT_ALGO = 'sha3-256'; // sha256  sha3-384
@@ -70,46 +63,24 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
 
     private const AES_KEY_LENGTH = 32;
 
-    private readonly string $appKey;
+    /** @var string|null กุญแจหลักแอปพลิเคชัน — ไม่ใช้ readonly เพื่อให้ memzero ใน __destruct ทำงานได้ */
+    private ?string $appKey;
 
-    private readonly ?string $saltKey1;
+    private readonly string $saltKey1;
 
-    private readonly ?string $saltKey2;
+    private readonly string $saltKey2;
 
     public function __construct()
     {
-        $rawKey = (string) config('app.key', '');
+        $rawKeyVal = config('app.key', '');
+        $rawKey = is_scalar($rawKeyVal) ? (string) $rawKeyVal : '';
         $this->appKey = $this->parseKey($rawKey);
-        $this->saltKey1 = config('core.base::security.hash_salt.key1');
-        $this->saltKey2 = config('core.base::security.hash_salt.key2');
-    }
 
-    /**
-     * คืน [opslimit, memlimit] ตาม Argon2id level
-     *
-     * @return array{0: int, 1: int}
-     *
-     * @throws InvalidArgumentException เมื่อ level ไม่รองรับ
-     */
-    private static function pwhashParams(string $level): array
-    {
-        return match ($level) {
-            self::PWHASH_INTERACTIVE => [
-                SODIUM_CRYPTO_PWHASH_OPSLIMIT_INTERACTIVE,
-                SODIUM_CRYPTO_PWHASH_MEMLIMIT_INTERACTIVE,
-            ],
-            self::PWHASH_MODERATE => [
-                SODIUM_CRYPTO_PWHASH_OPSLIMIT_MODERATE,
-                SODIUM_CRYPTO_PWHASH_MEMLIMIT_MODERATE,
-            ],
-            self::PWHASH_SENSITIVE => [
-                SODIUM_CRYPTO_PWHASH_OPSLIMIT_SENSITIVE,
-                SODIUM_CRYPTO_PWHASH_MEMLIMIT_SENSITIVE,
-            ],
-            default => throw new InvalidArgumentException(
-                "Argon2id level ไม่รองรับ: '{$level}' — ใช้ PWHASH_INTERACTIVE, PWHASH_MODERATE, หรือ PWHASH_SENSITIVE",
-            ),
-        };
+        $sKey1 = config('core.base::security.hash_salt.key1');
+        $this->saltKey1 = is_scalar($sKey1) ? (string) $sKey1 : '';
+
+        $sKey2 = config('core.base::security.hash_salt.key2');
+        $this->saltKey2 = is_scalar($sKey2) ? (string) $sKey2 : '';
     }
 
     /**
@@ -117,8 +88,10 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
      */
     public function __destruct()
     {
-        $key = $this->appKey;
-        self::memzero($key);
+        if ($this->appKey !== null) {
+            \sodium_memzero($this->appKey);
+            $this->appKey = null;
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -498,83 +471,64 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
     // ═══════════════════════════════════════════════════════════
     //  HKDF (Hash-based Key Derivation — RFC 5869)
     // ═══════════════════════════════════════════════════════════
-    public function deriveKeyFromPassword(string $inputPassword, string $saltb64, bool $isBase64 = true, bool $urlSafe = false): string
+
+    /**
+     * สร้างกุญแจย่อยจาก Master Key ด้วย BLAKE2b KDF
+     *
+     * @param  string  $context  บริบทการใช้งาน (ตัดหรือ pad ให้เป็น 8 bytes อัตโนมัติ)
+     * @param  int  $subkeyId  รหัสกุญแจย่อย (0–4294967295)
+     * @param  string|null  $inputKeyMaterial  กุญแจหลัก (null = ใช้ config masterkey)
+     * @param  bool  $useBinary  ส่งคืนเป็น Base64 หรือ raw binary
+     * @return string กุญแจย่อย (binary หรือ Base64)
+     *
+     * @throws RuntimeException เมื่อ inputKeyMaterial ว่าง หรือขนาดกุญแจไม่ถูกต้อง
+     */
+    public function deriveKey(string $context = 'default_', int $subkeyId = 0, ?string $inputKeyMaterial = null, bool $useBinary = false): string
     {
-        $salt = $this->decodeb64($saltb64);
-        if (strlen($salt) !== SODIUM_CRYPTO_PWHASH_SALTBYTES) {
-            throw new RuntimeException(
-                'Salt must be exactly '.SODIUM_CRYPTO_PWHASH_SALTBYTES.' bytes',
-            );
-        }
-        if (empty($inputPassword)) {
-            throw new RuntimeException(
-                'InputPassword must not be empty',
-            );
+        $ikm = $this->resolveKey($inputKeyMaterial, 32);
+        // เช็ค $context  ต้องมีขนาด  8 ตัวอักษรเท่านั้น
+        if (strlen($context) !== SODIUM_CRYPTO_KDF_CONTEXTBYTES) {
+            throw new RuntimeException('deriveKey: context ต้องมีขนาด '.SODIUM_CRYPTO_KDF_CONTEXTBYTES.' ตัวอักษรเท่านั้น');
         }
 
-        $key = sodium_crypto_pwhash(
-            SODIUM_CRYPTO_SECRETBOX_KEYBYTES,         // ความยาวกุญแจที่ต้องการ (เช่น 32 bytes สำหรับ AES-256)
-            $inputPassword,     // รหัสผ่านจากผู้ใช้
-            $salt,         // Salt ขนาด 16 bytes (SODIUM_CRYPTO_PWHASH_SALTBYTES)
-            SODIUM_CRYPTO_PWHASH_OPSLIMIT_INTERACTIVE,        // จำนวนรอบการประมวลผล
-            SODIUM_CRYPTO_PWHASH_MEMLIMIT_INTERACTIVE,        // จำนวน RAM ที่ใช้ (หน่วยเป็น Bytes)
-            SODIUM_CRYPTO_PWHASH_ALG_ARGON2ID13,             // เลือก SODIUM_CRYPTO_PWHASH_ALG_ARGON2ID13
-        );
+        if (empty($ikm)) {
+            $masterKeyRaw = config('core.base::security.masterkey', '');
+            $ikm = is_scalar($masterKeyRaw) ? (string) $masterKeyRaw : '';
+        }
 
-        return $this->maybeBase64($key, $isBase64, $urlSafe);
-        // password_hash() ใช้ Argon2id เป็นค่า default
-        // ซึ่งเป็น algorithm ที่แนะนำสำหรับ password hashing
-        // return password_hash($password, PASSWORD_ARGON2ID, ['salt' => $salt]);
-    }
+        if (empty($ikm)) {
+            throw new RuntimeException('deriveKey: inputKeyMaterial ไม่สามารถเว้นว่างได้');
+        }
 
-    public function verifyDerivedKeyFromPassword(string $inputPassword, string $storedSaltb64, string $storedKey): bool
-    {
-        $derivedKey = $this->deriveKeyFromPassword($inputPassword, $storedSaltb64);
+        // Context ต้องเป็นขนาด SODIUM_CRYPTO_KDF_CONTEXTBYTES (8 bytes) พอดี
+        $ctx = \str_pad(\substr($context, 0, SODIUM_CRYPTO_KDF_CONTEXTBYTES), SODIUM_CRYPTO_KDF_CONTEXTBYTES, "\0");
 
-        // ✅ ใช้ hash_equals() — ป้องกัน timing attack
-        return hash_equals($storedKey, $derivedKey);
+        // Key ต้องเป็นขนาด SODIUM_CRYPTO_KDF_KEYBYTES (32 bytes) — parse base64 ก่อนถ้าจำเป็น
+        if (\strlen($ikm) !== SODIUM_CRYPTO_KDF_KEYBYTES) {
+            $parsed = $this->parseKey($ikm);
+            if ($parsed !== null && \strlen($parsed) === SODIUM_CRYPTO_KDF_KEYBYTES) {
+                $ikm = $parsed;
+            } else {
+                // Normalize ด้วย HKDF ให้ได้ 32 bytes
+                $ikm = hash_hkdf('sha3-256', $ikm, SODIUM_CRYPTO_KDF_KEYBYTES, 'kdf-key-normalize');
+            }
+        }
+
+        $binaryKey = \sodium_crypto_kdf_derive_from_key(self::AES_KEY_LENGTH, $subkeyId, $ctx, $ikm);
+
+        return self::encodeKey($binaryKey, $useBinary);
     }
 
     /**
-     * สร้างกุญแจย่อยจาก Master Key โดยใช้ HKDF
-     *
-     * @param  string  $context  บริบทการใช้งาน (Domain Separation)
-     * @param  string  $saltb64  Salt ในรูปแบบ Base64
-     * @param  string|null  $inputKeyMaterial  Input Key Material (ถ้าเป็น null จะใช้ config('core.base::security.masterkey'))
-     * @param  bool  $isBase64  ส่งคืนค่าเป็น Base64 หรือไม่
-     * @param  bool  $urlSafe  ใช้ URL-safe Base64 หรือไม่
-     * @return string กุญแจย่อยที่สร้างขึ้น
-     *
-     * @throws RuntimeException ถ้า inputKeyMaterial หรือ salt เป็นค่าว่าง
+     * ตรวจสอบว่า Derived Key นี้มาจาก Master Key เดิมหรือไม่
      */
-    public function deriveKey(string $context = 'default', string $saltb64 = '', ?string $inputKeyMaterial = null, bool $isBase64 = true, bool $urlSafe = false): string
+    public function verifyDerivedKey(string $providedDerivedKey, string $context, int $subkeyId, string $masterKey = '', bool $useBinary = false): bool
     {
-        if (empty($inputKeyMaterial)) {
-            $inputKeyMaterial = config('core.base::security.masterkey', '');
-        }
-        if (empty($inputKeyMaterial)) {
-            throw new RuntimeException('Invalid inputKeyMaterial string.');
-        }
-        // ถ้าไม่ส่ง salt ให้ใช้ empty string (hash_hkdf รองรับ salt ว่าง)
-        // แต่ถ้าส่ง salt มาแล้ว decode ไม่ได้ → throw
-        if ($saltb64 !== '') {
-            $decoded = $this->decodeb64($saltb64);
-            if ($decoded === false || $decoded === '') {
-                throw new RuntimeException('Invalid salt string. in '.__FUNCTION__);
-            }
-            $salt = $decoded;
-        } else {
-            $salt = '';
-        }
+        // สร้าง Derived Key ใหม่จาก Master Key
+        $computedKey = $this->deriveKey($context, $subkeyId, $masterKey, $useBinary);
 
-        // 1. ตรวจสอบความถูกต้องของ Algorithm
-        $this->assertHmacAlgorithm(self::HMAC_DEFAULT_ALGO);
-        // 2. ใช้ hash_hkdf เพื่อสร้างกุญแจย่อย
-        // การใส่ $context (Info) จะทำให้กุญแจแต่ละประเภทแยกออกจากกันเด็ดขาด (Domain Separation)
-        $binaryKey = hash_hkdf(self::HMAC_DEFAULT_ALGO, $inputKeyMaterial, self::AES_KEY_LENGTH, $context, $salt);
-
-        // 3. ส่งคืนค่า (แนะนำให้ส่งเป็น Raw Binary เพื่อนำไปใช้ต่อใน openssl_encrypt ได้ทันที)
-        return $this->maybeBase64($binaryKey, $isBase64, $urlSafe);
+        // เปรียบเทียบแบบปลอดภัย (timing attack safe)
+        return hash_equals($computedKey, $providedDerivedKey);
     }
 
     // ใช้งาน native hash_hkdf
@@ -589,54 +543,50 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
     }
 
     /**
-     * ตรวจสอบว่า Derived Key นี้มาจาก Master Key เดิมหรือไม่
-     */
-    public function verifyDerivedKey(string $providedDerivedKey, string $purpose, string $saltb64 = '', string $masterKey = ''): bool
-    {
-        // สร้าง Derived Key ใหม่จาก Master Key
-        $computedKey = $this->deriveKey($purpose, $saltb64, $masterKey);
-
-        // เปรียบเทียบแบบปลอดภัย (timing attack safe)
-        return hash_equals($computedKey, $providedDerivedKey);
-    }
-
-    /**
-     * สร้างกุญแจย่อยจาก Master Key โดยใช้ HKDF
+     * สร้างกุญแจย่อยแบบ Password-Based ด้วย Argon2id + HKDF + HMAC
      *
-     * @param  string  $context  บริบทการใช้งาน (Domain Separation)
+     * กระบวนการ 3 ขั้นตอน:
+     *   1. Argon2id KDF — แปลง masterKey + salt → raw key (ป้องกัน brute-force)
+     *   2. HKDF — อนุมานกุญแจใหม่พร้อม domain separation ด้วย context
+     *   3. HMAC-SHA3-256 — binding กุญแจกับ salt เพื่อความสมบูรณ์
+     *
+     * @param  string  $context  บริบทการใช้งาน (Domain Separation Label)
      * @param  string  $saltb64  Salt ในรูปแบบ Base64
-     * @param  bool  $isBase64  ส่งคืนค่าเป็น Base64 หรือไม่
-     * @param  bool  $urlSafe  ใช้ URL-safe Base64 หรือไม่
-     * @return string กุญแจย่อยที่สร้างขึ้น
+     * @param  string  $masterKey  รหัสผ่าน / master key ต้นทาง
+     * @return string กุญแจย่อย (raw binary หรือ Base64)
      *
-     * @throws RuntimeException ถ้า inputKeyMaterial หรือ salt เป็นค่าว่าง
+     * @throws RuntimeException เมื่อ masterKey หรือ salt ไม่ถูกต้อง
      */
-    public function passwordForSafe(string $context = 'default', string $saltb64 = '', string $masterKey = '', bool $isBase64 = false, bool $urlSafe = false): string
+    public function passwordForSafe(string $context = 'default', string $saltb64 = '', string $masterKey = '', bool $useBinary = false): string
     {
-        $salt = $this->decodeb64($saltb64);
-        $MasterKeyPassword = $this->deriveKeyFromPassword($masterKey, $saltb64);  // แปลงรหัสผ่าน master key ให้เป็นกุญแจ เข้ารหัส Argon2id
-        $derivedKey = $this->deriveKey($context, $saltb64, $MasterKeyPassword); // สร้างกุญแจ ดอกใหม่จาก แม่กุญแจ
-        if ($derivedKey === false) {
-            throw new RuntimeException('Invalid derived key string.');
-        }
+        $rawSalt = $saltb64 !== '' ? $this->resolveKey($saltb64, 32) : '';
+        $rawSalt = ($rawSalt !== false) ? $rawSalt : '';
 
-        // สร้าง HMAC โดยใช้ SHA-256  sha3-256
-        $hmac = hash_hmac('sha3-256', $derivedKey, $salt);
+        // 1. Argon2id — แปลง masterKey → raw binary key (ป้องกัน brute-force)
+        $argonKey = $this->deriveKeyFromPassword($masterKey, $saltb64, $useBinary);
 
-        return $this->maybeBase64($hmac, $isBase64, $urlSafe);
+        // 2. HKDF — domain separation ด้วย context
+        $hkdfKey = $this->hkdf($argonKey, 32, $context, $rawSalt);
+
+        // 3. HMAC-SHA3-256 — binding กุญแจกับ salt
+        $hmac = hash_hmac('sha3-256', $hkdfKey, $rawSalt, true);
+
+        return self::encodeKey($hmac, $useBinary);
     }
 
     /**
-     * ตรวจสอบกุญแจย่อยว่ามาจาก Master Key เดิมหรือไม่
+     * ตรวจสอบกุญแจย่อยว่ามาจาก Master Key เดิมหรือไม่ (timing-safe)
      *
      * @param  string  $providedDerivedKey  กุญแจย่อยที่ต้องการตรวจสอบ
      * @param  string  $context  บริบทการใช้งาน (ต้องตรงกับตอนสร้าง)
      * @param  string  $saltb64  Salt ในรูปแบบ Base64 (ต้องตรงกับตอนสร้าง)
-     * @return bool true ถ้ากุญแจถูกต้อง, false ถ้าไม่ถูกต้อง
+     * @param  string  $masterKey  รหัสผ่าน / master key ต้นทาง
+     * @param  bool  $useBinary  กุญแจที่ให้มาเป็น Base64 หรือไม่
+     * @return bool true ถ้ากุญแจถูกต้อง
      */
-    public function verifyPasswordForSafe(string $providedDerivedKey, string $context = 'default', string $saltb64 = '', string $masterKey = ''): bool
+    public function verifyPasswordForSafe(string $providedDerivedKey, string $context = 'default', string $saltb64 = '', string $masterKey = '', bool $useBinary = false): bool
     {
-        $computedKey = $this->passwordForSafe($context, $saltb64, $masterKey);
+        $computedKey = $this->passwordForSafe($context, $saltb64, $masterKey, $useBinary);
 
         return hash_equals($computedKey, $providedDerivedKey);
     }
@@ -762,32 +712,34 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
             $usedChars = $presets['lower_case'].$presets['upper_case'].$presets['numbers'];
         }
 
-        $charList = preg_split('//u', $usedChars, -1, PREG_SPLIT_NO_EMPTY);
+        $charListRaw = preg_split('//u', $usedChars, -1, PREG_SPLIT_NO_EMPTY);
+        $charList = is_array($charListRaw) ? $charListRaw : [];
         $charCount = count($charList);
+
+        if ($charCount === 0) {
+            throw new RuntimeException('randomString: ไม่มีอักขระสำหรับสร้าง string');
+        }
 
         $results = [];
         for ($c = 0; $c < $count; $c++) {
             $str = '';
             for ($i = 0; $i < $length; $i++) {
-                $str .= $charList[random_int(0, $charCount - 1)];
+                /** @var string $char */
+                $char = $charList[random_int(0, $charCount - 1)];
+                $str .= $char;
             }
             $results[] = $str;
         }
 
-        return $count === 1 ? $results[0] : $results;
+        return $count === 1 ? (string) $results[0] : $results;
     }
 
     /**
      * Hash รหัสผ่าน (Argon2id)
-     *
-     * @param  string  $password  รหัสผ่านที่ต้องการ hash
-     * @param  string  $level  ระดับความปลอดภัย: PWHASH_INTERACTIVE | PWHASH_MODERATE | PWHASH_SENSITIVE
-     *
-     * @throws InvalidArgumentException เมื่อ level ไม่รองรับ
      */
-    public function pwhash(string $password, string $level = self::PWHASH_INTERACTIVE): string
+    public function pwhash(string $password, ArgonLevel $level = ArgonLevel::Interactive): string
     {
-        [$opsLimit, $memLimit] = self::pwhashParams($level);
+        [$opsLimit, $memLimit] = $level->params();
 
         return \sodium_crypto_pwhash_str($password, $opsLimit, $memLimit);
     }
@@ -799,19 +751,17 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
 
     /**
      * ตรวจสอบว่าต้อง Rehash หรือไม่ (เมื่อ level เปลี่ยน หรือพารามิเตอร์ถูก upgrade)
-     *
-     * @param  string  $level  ระดับเดียวกับที่ใช้ตอน hash ปัจจุบัน
      */
-    public function pwhashNeedsRehash(string $hash, string $level = self::PWHASH_INTERACTIVE): bool
+    public function pwhashNeedsRehash(string $hash, ArgonLevel $level = ArgonLevel::Interactive): bool
     {
-        [$opsLimit, $memLimit] = self::pwhashParams($level);
+        [$opsLimit, $memLimit] = $level->params();
 
         return \sodium_crypto_pwhash_str_needs_rehash($hash, $opsLimit, $memLimit);
     }
 
     protected function getAppKey(): string
     {
-        return $this->appKey;
+        return $this->resolveAppKey();
     }
 
     // ─── Private ────────────────────────────────────────────────
@@ -820,14 +770,12 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
     /**
      * Resolve APP_KEY — ใช้ key ที่ให้มา หรือ fallback เป็น APP_KEY
      */
-    private function resolveAppKey(?string $key): string
+    private function resolveAppKey(?string $key = null): string
     {
         $resolved = $key !== null ? $this->parseKey($key) : $this->appKey;
 
-        if ($resolved === '') {
-            throw new InvalidArgumentException(
-                'Key is required. Set APP_KEY in .env or pass a key explicitly.',
-            );
+        if ($resolved === null || $resolved === '') {
+            throw new RuntimeException('Hash key is missing or invalid');
         }
 
         return $resolved;
@@ -845,13 +793,13 @@ final class HashHelper implements HashHelperInterface, KeyDerivationInterface
         $key1 = $this->saltKey1;
         $key2 = $this->saltKey2;
 
-        if (app()->isProduction() && ($key1 === null || $key2 === null)) {
+        if (app()->isProduction() && ($key1 === '' || $key2 === '')) {
             throw new RuntimeException('HASH_SALT_KEY1 and HASH_SALT_KEY2 must be set in .env for production');
         }
 
         return [
-            $key1 ?? 'dev-key-1-change-in-production',
-            $key2 ?? 'dev-key-2-change-in-production',
+            $key1 !== '' ? $key1 : 'dev-key-1-change-in-production',
+            $key2 !== '' ? $key2 : 'dev-key-2-change-in-production',
         ];
     }
 

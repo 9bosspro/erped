@@ -5,21 +5,16 @@ declare(strict_types=1);
 namespace Core\Base\Support\Helpers\Crypto\Contracts;
 
 /**
- * KeyDerivationInterface — สัญญาสำหรับ Key Derivation (HKDF)
+ * KeyDerivationInterface — สัญญาสำหรับ Key Derivation Function (KDF)
  *
  * แยกออกจาก HashHelperInterface เพราะ key derivation เป็นคนละ concern กับ hashing
+ *
+ * ครอบคลุม:
+ *  - BLAKE2b KDF     (deriveKey)              — subkey จาก master key
+ *  - Argon2id KDF    (deriveKeyFromPassword)  — key จาก password + salt
+ *  - KDF Verify      (verifyDerivedKey, verifyDerivedKeyFromPassword)
  */
 interface KeyDerivationInterface
 {
-    public function deriveKey(
-        string $context = 'default',
-        string $saltb64 = '',
-        string $inputKeyMaterial = '',
-    ): string;
-
-    public function deriveKeyFromPassword(string $inputPassword, string $saltb64): string;
-
-    public function verifyDerivedKey(string $providedDerivedKey, string $purpose, string $saltb64 = '', string $masterKey = ''): bool;
-
-    public function verifyDerivedKeyFromPassword(string $inputPassword, string $storedSaltb64, string $storedKeyb64): bool;
+    //
 }

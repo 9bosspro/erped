@@ -17,9 +17,11 @@ class UserRepository implements UserRepositoryInterface
      */
     public function findById(int $id): ?User
     {
+        $ttl = config('myapp.cache.user_ttl', 3600);
+
         return Cache::remember(
             "user:{$id}",
-            config('myapp.cache.user_ttl', 3600),
+            \is_int($ttl) ? $ttl : 3600,
             fn () => User::find($id),
         );
     }
@@ -29,15 +31,19 @@ class UserRepository implements UserRepositoryInterface
      */
     public function findByEmail(string $email): ?User
     {
+        $ttl = config('myapp.cache.user_ttl', 3600);
+
         return Cache::remember(
             "user:email:{$email}",
-            config('myapp.cache.user_ttl', 3600),
+            \is_int($ttl) ? $ttl : 3600,
             fn () => User::where('email', $email)->first(),
         );
     }
 
     /**
      * ดำเนินการสร้างผู้ใช้งานใหม่ในระบบ
+     *
+     * @param array<string, mixed> $data
      */
     public function create(array $data): User
     {
@@ -46,6 +52,8 @@ class UserRepository implements UserRepositoryInterface
 
     /**
      * ดำเนินการอัปเดตรายละเอียดของผู้ใช้และล้างแคช (Cache Invalidation)
+     *
+     * @param array<string, mixed> $data
      */
     public function update(User $user, array $data): User
     {

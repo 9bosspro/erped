@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
@@ -17,7 +19,7 @@ class HealthController extends Controller
             'backend_api' => $this->checkBackendApi(),
         ];
 
-        $healthy = ! in_array(false, array_column($checks, 'ok'), true);
+        $healthy = ! \in_array(false, array_column($checks, 'ok'), true);
 
         return response()->json([
             'status' => $healthy ? 'healthy' : 'unhealthy',
@@ -25,6 +27,7 @@ class HealthController extends Controller
         ], $healthy ? 200 : 503);
     }
 
+    /** @return array{ok: bool, error?: string} */
     private function checkDatabase(): array
     {
         try {
@@ -36,6 +39,7 @@ class HealthController extends Controller
         }
     }
 
+    /** @return array{ok: bool, error?: string} */
     private function checkCache(): array
     {
         try {
@@ -49,12 +53,14 @@ class HealthController extends Controller
         }
     }
 
+    /** @return array{ok: bool, error?: string} */
     private function checkBackendApi(): array
     {
         try {
-            $response = Http::timeout(5)
-                ->acceptJson()
-                ->get(config('backend.api_url').'/api/health');
+            $apiUrl = config('backend.api_url');
+            $url    = (\is_string($apiUrl) ? $apiUrl : '') . '/api/health';
+
+            $response = Http::timeout(5)->acceptJson()->get($url);
 
             return ['ok' => $response->successful()];
         } catch (\Throwable) {

@@ -41,10 +41,14 @@ class LogParserService
 
     public function __construct()
     {
-        $this->tableName = (string) config('logging.parser.table', 'system_logs');
-        $this->batchSize = (int) config('logging.parser.batch_size', 500);
+        $tableRaw = config('logging.parser.table', 'system_logs');
+        $this->tableName = is_string($tableRaw) ? $tableRaw : 'system_logs';
 
-        $minDiskMb = (int) config('logging.parser.min_disk_space_mb', 500);
+        $batchRaw = config('logging.parser.batch_size', 500);
+        $this->batchSize = is_int($batchRaw) ? $batchRaw : (is_numeric($batchRaw) ? (int) $batchRaw : 500);
+
+        $diskRaw = config('logging.parser.min_disk_space_mb', 500);
+        $minDiskMb = is_int($diskRaw) ? $diskRaw : (is_numeric($diskRaw) ? (int) $diskRaw : 500);
         $this->minDiskSpaceFree = $minDiskMb * 1024 * 1024;
     }
 
@@ -78,9 +82,10 @@ class LogParserService
 
         try {
             // ตรวจพื้นที่ดิสก์
-            $freeSpace = Cache::remember('disk_free_space', 60, fn (): float|false => disk_free_space(storage_path()));
+            $freeSpaceRaw = Cache::remember('disk_free_space', 60, fn (): float|false => disk_free_space(storage_path()));
+            $freeSpace = is_float($freeSpaceRaw) || is_int($freeSpaceRaw) ? (float) $freeSpaceRaw : null;
 
-            if ($freeSpace !== false && $freeSpace < $this->minDiskSpaceFree) {
+            if ($freeSpace !== null && $freeSpace < $this->minDiskSpaceFree) {
                 Log::emergency('LogParser stopped: Disk space is too low!');
 
                 return 'หยุดการทำงาน: พื้นที่ดิสก์เหลือต่ำกว่ากำหนด';
@@ -88,7 +93,8 @@ class LogParserService
 
             // อ่านต่อจาก offset เดิม
             $cacheKey = 'log_parser_offset_'.$fileName;
-            $lastOffset = (int) Cache::get($cacheKey, 0);
+            $cacheGet = Cache::get($cacheKey, 0);
+            $lastOffset = is_int($cacheGet) ? $cacheGet : (is_numeric($cacheGet) ? (int) $cacheGet : 0);
             $fileSize = File::size($path);
 
             if ($lastOffset > $fileSize) {
@@ -137,11 +143,13 @@ class LogParserService
 
                 try {
                     $fingerprint = hash('sha256', $line);
-                    $data = json_decode($line, true);
+                    $jsonData = json_decode($line, true);
 
-                    $batch[] = (is_array($data) && json_last_error() === JSON_ERROR_NONE)
-                        ? $this->buildParsedRow($data, $fingerprint)
-                        : $this->buildRawRow($line, $fingerprint);
+                    if (is_array($jsonData) && json_last_error() === JSON_ERROR_NONE) {
+                        $batch[] = $this->buildParsedRow($jsonData, $fingerprint);
+                    } else {
+                        $batch[] = $this->buildRawRow($line, $fingerprint);
+                    }
 
                     $count++;
 
@@ -160,7 +168,10 @@ class LogParserService
             }
 
             // บันทึก offset สำหรับรอบถัดไป
-            Cache::put($cacheKey, ftell($file), now()->addDay());
+            $offset = ftell($file);
+            if ($offset !== false) {
+                Cache::put($cacheKey, $offset, now()->addDay());
+            }
 
             return $count;
         } finally {
@@ -171,7 +182,7 @@ class LogParserService
     /**
      * สร้าง row สำหรับ log ที่ parse สำเร็จ (JSON format)
      *
-     * @param  array<string, mixed>  $data  parsed JSON data
+     * @param  array<int|string, mixed>  $data  parsed JSON data
      * @param  string  $fingerprint  SHA-256 fingerprint
      * @return array<string, mixed> row พร้อม upsert
      */
@@ -179,7 +190,7 @@ class LogParserService
     {
         return [
             'fingerprint' => $fingerprint,
-            'log_date' => isset($data['datetime'])
+            'log_date' => isset($data['datetime']) && is_string($data['datetime'])
                 ? Carbon::parse($data['datetime'])->toDateTimeString()
                 : now()->toDateTimeString(),
             'level' => $data['level_name'] ?? 'INFO',

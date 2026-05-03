@@ -7,7 +7,7 @@ namespace Core\Base\Traits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Response;
 
-trait ApiResponseTraits
+trait ApiResponseTrait
 {
     /**
      * ส่ง JSON response แบบ success ผ่าน Response macro

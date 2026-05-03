@@ -608,7 +608,9 @@ final class CacheManager implements CacheManagerInterface
      */
     public function getCachedResponse(string $url): ?string
     {
-        return Cache::get($this->makeResponseKey($url));
+        $value = Cache::get($this->makeResponseKey($url));
+
+        return is_string($value) ? $value : null;
     }
 
     /**

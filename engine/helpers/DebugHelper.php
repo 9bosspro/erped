@@ -15,12 +15,11 @@ if (! function_exists('tt')) {
     /**
      * ฟังก์ชันครอบจักรวาลสำหรับ Debug
      *
-     * @param  mixed  $var
-     * @param  bool  $return
+     * @param  mixed  $var  ตัวแปรที่ต้องการ debug
+     * @param  bool  $return  true = ใช้ dd(), false = echo + exit()
      */
-    function tt($var = '', $return = false): void
+    function tt(mixed $var = '', bool $return = false): never
     {
-        is_bool($return) or ($return = true);
         $_var = '';
 
         if (is_null($var)) {
@@ -43,12 +42,8 @@ if (! function_exists('tt')) {
         } elseif (is_bool($var)) {
             $_var = 'var เป็น  ค่า บูลีน    คือ ';
         } elseif (is_object($var)) {
-            $_var = 'var  เป็น  ออฟเจ็ค   คือ ';
-            if (empty($var)) {
-                $_var = $_var.' เป็น  ออฟเจ็ค  ค่าว่าง  ';
-            } else {
-                $_var = $_var.' เป็น  ออฟเจ็ค  ไม่ค่าว่าง    ';
-            }
+            // objects เสมอไม่เป็น falsy ใน PHP — ไม่ต้องตรวจ empty()
+            $_var = 'var  เป็น  ออฟเจ็ค   คือ  ไม่ค่าว่าง';
         } elseif (is_array($var)) {
             $_var = 'var  เป็น  array';
             if (empty($var)) {
@@ -121,14 +116,14 @@ if (! function_exists('ttt')) {
             if ($var === '') {
                 $extra[] = 'ข้อความว่าง';
             }
-            if (json_decode($var) !== null && json_last_error() === JSON_ERROR_NONE) {
+            if (\is_string($var) && json_validate($var)) {
                 $extra[] = 'เป็น JSON ที่ถูกต้อง';
             }
         }
         if ($type === 'array' && empty($var)) {
             $extra[] = 'อาเรย์ว่าง';
         }
-        if ($type === 'object') {
+        if ($type === 'object' && \is_object($var)) {
             $extra[] = 'คลาส: '.get_class($var);
         }
 

@@ -32,7 +32,9 @@ class Httpclients
      */
     public function getAccessToken(): string
     {
-        return (string) config('services.sso_master_api.api_key', '');
+        $key = config('services.sso_master_api.api_key', '');
+
+        return is_string($key) ? $key : '';
     }
 
     /**
@@ -42,26 +44,34 @@ class Httpclients
      */
     public function getUserInfo(string $accessToken): Response
     {
+        $ssoHost = config('auth.auth_sso_host', '');
+        $ssoHost = is_string($ssoHost) ? $ssoHost : '';
+
         return Http::withHeaders([
             'Accept' => 'application/json',
             'Authorization' => "Bearer {$accessToken}",
-        ])->post(config('auth.auth_sso_host').'/api/v1/me');
+        ])->post($ssoHost.'/api/v1/me');
     }
 
     /**
      * ตรวจสอบ access token ปัจจุบัน
      *
      * @param  string  $accessToken  Bearer token
-     * @return array<string, mixed>|null ข้อมูล token
+     * @return array<int|string, mixed>|null ข้อมูล token
      */
     public function currentAccessTokens(string $accessToken): ?array
     {
+        $ssoHost = config('auth.auth_sso_host', '');
+        $ssoHost = is_string($ssoHost) ? $ssoHost : '';
+
         $response = Http::withHeaders([
             'Accept' => 'application/json',
             'Authorization' => "Bearer {$accessToken}",
-        ])->post(config('auth.auth_sso_host').'/api/v1/currentAccessToken');
+        ])->post($ssoHost.'/api/v1/currentAccessToken');
 
-        return $response->json();
+        $result = $response->json();
+
+        return is_array($result) ? $result : null;
     }
 
     /**
@@ -115,8 +125,9 @@ class Httpclients
             'Invalid OAuth state — possible CSRF attack.',
         );
 
+        $ssoHost = config('auth.sso_host', '');
         $response = Http::asForm()->post(
-            config('auth.sso_host').'/oauth/token',
+            (is_string($ssoHost) ? $ssoHost : '').'/oauth/token',
             [
                 'grant_type' => 'authorization_code',
                 'client_id' => config('auth.client_id'),
@@ -126,7 +137,8 @@ class Httpclients
             ],
         );
 
-        $request->session()->put($response->json());
+        $sessionData = $response->json();
+        $request->session()->put(is_array($sessionData) ? $sessionData : []);
 
         return redirect(route('sso.connect'));
     }
@@ -152,12 +164,14 @@ class Httpclients
      */
     private function sendSsoRequest(string $endpoint, array $data, string $signature): Response
     {
+        $ssoHost = config('services.sso_master_server.sso_host', '');
+
         return Http::withHeaders([
             'Accept' => 'application/json',
             'Authorization' => "Bearer {$this->getAccessToken()}",
             'Signature' => $signature,
         ])->post(
-            config('services.sso_master_server.sso_host').$endpoint,
+            (is_string($ssoHost) ? $ssoHost : '').$endpoint,
             $data,
         );
     }

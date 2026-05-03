@@ -24,7 +24,7 @@ class CheckOddEvenRule implements Rule
     public function passes($attribute, $value)
     {
         //
-        if ($value % 2 == 0) {
+        if (is_numeric($value) && ($value % 2) == 0) {
             return true;
         }
 

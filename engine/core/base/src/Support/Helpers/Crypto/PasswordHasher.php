@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Core\Base\Support\Helpers\Crypto;
 
+use Core\Base\Enums\ArgonLevel;
 use Core\Base\Support\Helpers\Crypto\Concerns\ParsesEncryptionKey;
 use Core\Base\Support\Helpers\Crypto\Contracts\PasswordHasherInterface;
 use InvalidArgumentException;
@@ -52,13 +53,27 @@ final class PasswordHasher implements PasswordHasherInterface
 
     public function __construct()
     {
-        $this->argonMemory = (int) config('core.base::security.password.argon_memory', self::DEFAULT_ARGON_MEMORY);
-        $this->argonTime = (int) config('core.base::security.password.argon_time', self::DEFAULT_ARGON_TIME);
-        $this->argonThreads = (int) config('core.base::security.password.argon_threads', self::DEFAULT_ARGON_THREADS);
-        $this->bcryptCost = (int) config('core.base::security.password.bcrypt_cost', self::DEFAULT_BCRYPT_COST);
-        $this->pepper = (string) config('core.base::security.password.pepper', '');
-        $this->minLength = (int) config('core.base::security.password.min_length', self::MIN_LENGTH);
-        $this->maxLength = (int) config('core.base::security.password.max_length', self::MAX_LENGTH);
+        $argonMemory = config('core.base::security.password.argon_memory', self::DEFAULT_ARGON_MEMORY);
+        $this->argonMemory = is_scalar($argonMemory) ? (int) $argonMemory : self::DEFAULT_ARGON_MEMORY;
+
+        $argonTime = config('core.base::security.password.argon_time', self::DEFAULT_ARGON_TIME);
+        $this->argonTime = is_scalar($argonTime) ? (int) $argonTime : self::DEFAULT_ARGON_TIME;
+
+        $argonThreads = config('core.base::security.password.argon_threads', self::DEFAULT_ARGON_THREADS);
+        $this->argonThreads = is_scalar($argonThreads) ? (int) $argonThreads : self::DEFAULT_ARGON_THREADS;
+
+        $bcryptCost = config('core.base::security.password.bcrypt_cost', self::DEFAULT_BCRYPT_COST);
+        $this->bcryptCost = is_scalar($bcryptCost) ? (int) $bcryptCost : self::DEFAULT_BCRYPT_COST;
+
+        $pepper = config('core.base::security.password.pepper', '');
+        $this->pepper = is_scalar($pepper) ? (string) $pepper : '';
+
+        $minLength = config('core.base::security.password.min_length', self::MIN_LENGTH);
+        $this->minLength = is_scalar($minLength) ? (int) $minLength : self::MIN_LENGTH;
+
+        $maxLength = config('core.base::security.password.max_length', self::MAX_LENGTH);
+        $this->maxLength = is_scalar($maxLength) ? (int) $maxLength : self::MAX_LENGTH;
+
         $this->requireUppercase = (bool) config('core.base::security.password.require_uppercase', true);
         $this->requireLowercase = (bool) config('core.base::security.password.require_lowercase', true);
         $this->requireDigit = (bool) config('core.base::security.password.require_digit', true);
@@ -78,6 +93,13 @@ final class PasswordHasher implements PasswordHasherInterface
             'time_cost' => $this->argonTime,
             'threads' => $this->argonThreads,
         ]);
+    }
+
+    public function hashAtLevel(string $password, ArgonLevel $level): string
+    {
+        $this->assertNotEmpty($password);
+
+        return password_hash($password, PASSWORD_ARGON2ID, $level->phpParams());
     }
 
     public function hashBcrypt(string $password): string
@@ -372,6 +394,9 @@ final class PasswordHasher implements PasswordHasherInterface
         return hash('sha256', $salt.$password).':'.$salt;
     }
 
+    /**
+     * @deprecated ใช้ verify() แทน — สำหรับ legacy hash เท่านั้น
+     */
     public function verifyWithSalt(string $password, string $hashWithSalt): bool
     {
         if ($password === '' || $hashWithSalt === '') {

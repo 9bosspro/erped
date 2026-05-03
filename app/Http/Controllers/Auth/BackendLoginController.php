@@ -45,8 +45,8 @@ class BackendLoginController extends Controller
         ]);
 
         $result = $this->authService->login(
-            $request->input('email'),
-            $request->input('password'),
+            $request->string('email')->value(),
+            $request->string('password')->value(),
         );
 
         if (! $result['success']) {

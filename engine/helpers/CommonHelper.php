@@ -102,21 +102,31 @@ if (! function_exists('get_ip_from_third_party')) {
      */
     function get_ip_from_third_party(): ?string
     {
-        return Cache::remember('server_public_ip', 600, function (): ?string {
-            $services = [
-                'https://ipecho.net/plain',
-                'https://api.ipify.org',
-                'https://ifconfig.me/ip',
-            ];
+        $ttlRaw = config('services.ip_lookup.cache_ttl', 600);
+        $ttl = \is_int($ttlRaw) ? $ttlRaw : 600;
 
+        $timeoutRaw = config('services.ip_lookup.timeout', 5);
+        $timeout = \is_int($timeoutRaw) ? $timeoutRaw : 5;
+        $servicesRaw = config('services.ip_lookup.services', [
+            'https://ipecho.net/plain',
+            'https://api.ipify.org',
+            'https://ifconfig.me/ip',
+        ]);
+        $services = \is_array($servicesRaw) ? $servicesRaw : [];
+
+        return Cache::remember('server_public_ip', $ttl, function () use ($services, $timeout): ?string {
             foreach ($services as $service) {
+                if (! \is_string($service)) {
+                    continue;
+                }
+
                 try {
-                    $ip = trim(Http::timeout(5)->get($service)->body());
+                    $ip = trim(Http::timeout($timeout)->get($service)->body());
 
                     if (filter_var($ip, FILTER_VALIDATE_IP)) {
                         return $ip;
                     }
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     Log::warning("Failed to get IP from {$service}: {$e->getMessage()}");
                 }
             }
@@ -137,9 +147,10 @@ if (! function_exists('dispatch_safe')) {
      */
     function dispatch_safe(object $job, ?string $queue = null): void
     {
-        $allowedQueues = ['high-priority', 'default', 'low-priority'];
+        $allowedRaw = config('queue.allowed_queues', ['high-priority', 'default', 'low-priority']);
+        $allowedQueues = \is_array($allowedRaw) ? $allowedRaw : ['default'];
 
-        if (! in_array($queue, $allowedQueues, true)) {
+        if (! \in_array($queue, $allowedQueues, strict: true)) {
             $queue = 'default';
         }
 

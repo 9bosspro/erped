@@ -11,6 +11,7 @@ use InvalidArgumentException;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use RuntimeException;
+use SplFileInfo;
 use Throwable;
 
 /**
@@ -56,7 +57,12 @@ final class FileManager
             return unlink($dir);
         }
 
-        foreach (scandir($dir) as $item) {
+        $items = scandir($dir);
+        if (! is_array($items)) {
+            return false;
+        }
+
+        foreach ($items as $item) {
             if ($item === '.' || $item === '..') {
                 continue;
             }
@@ -93,6 +99,7 @@ final class FileManager
         );
 
         foreach ($iterator as $item) {
+            /** @var SplFileInfo $item */
             $target = $dst.DIRECTORY_SEPARATOR.$iterator->getSubPathname();
 
             if ($item->isDir()) {
@@ -126,6 +133,7 @@ final class FileManager
 
         $files = [];
         foreach ($iterator as $fileInfo) {
+            /** @var SplFileInfo $fileInfo */
             if ($fileInfo->isFile()) {
                 $files[] = $fileInfo->getPathname();
             }
@@ -199,7 +207,8 @@ final class FileManager
             $contents = stream_get_contents($handle);
             $escapedKey = preg_quote($key, '/');  // ป้องกัน regex injection
             $pattern = "/^{$escapedKey}=.*$/m";
-            $replacement = "{$key}={$delim}{$newValue}{$delim}";
+            $replacementValue = is_scalar($newValue) ? (string) $newValue : '';
+            $replacement = "{$key}={$delim}{$replacementValue}{$delim}";
 
             if (preg_match($pattern, $contents)) {
                 $newContents = preg_replace($pattern, $replacement, $contents);
@@ -222,14 +231,15 @@ final class FileManager
      */
     public function getDotEnv(string $key, mixed $default = null): ?string
     {
+        $defaultStr = is_string($default) ? $default : null;
         if (! preg_match('/^[A-Z][A-Z0-9_]*$/i', $key)) {
-            return $default;
+            return $defaultStr;
         }
 
         $path = base_path('.env');
 
         if (! File::exists($path)) {
-            return $default;
+            return $defaultStr;
         }
 
         $contents = File::get($path);
@@ -239,7 +249,7 @@ final class FileManager
             return Str::of(trim($matches[1]))->trim('"\'')->toString();
         }
 
-        return $default;
+        return $defaultStr;
     }
 
     /**

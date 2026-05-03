@@ -45,11 +45,15 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $this->authorize('manage', $request->user());
+        $user = $request->user();
+        if (! $user instanceof \App\Models\User) {
+            abort(401);
+        }
 
-        // ทำการเรียก Service สำหรับอัปเดตข้อมูล และส่ง Data Transfer Object (DTO) ไปใช้งาน
+        $this->authorize('manage', $user);
+
         $this->profileService->updateProfile(
-            $request->user(),
+            $user,
             ProfileUpdateData::fromRequest($request),
         );
 
@@ -70,13 +74,14 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+        if (! $user instanceof \App\Models\User) {
+            abort(401);
+        }
 
         $this->authorize('manage', $user);
 
-        // ให้ออกจากระบบก่อนทำการลบ เพื่อปิดกั้นการเข้าใช้งานที่อาจค้างอยู่ในระบบรวดเร็ว (Session Security)
         Auth::logout();
 
-        // ส่งให้ ProfileService ลบตาม Repository
         $this->profileService->deleteAccount($user);
 
         // ทำลายเซสชัน ป้องกันการย้อนตึงข้ามมาใหม่ (Session Fixation Cleanup)

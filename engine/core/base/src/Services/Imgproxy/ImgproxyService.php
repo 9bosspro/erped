@@ -7,6 +7,7 @@ namespace Core\Base\Services\Imgproxy;
 use Core\Base\Services\Imgproxy\Contracts\ImgproxyServiceInterface;
 use Core\Base\Services\Imgproxy\Enums\OutputFormat;
 use Core\Base\Services\Imgproxy\Enums\SourceUrlMode;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -46,21 +47,34 @@ class ImgproxyService implements ImgproxyServiceInterface
 
     public function __construct()
     {
-        $this->endpoint = rtrim((string) config('imgproxy.endpoint', 'http://localhost:8080'), '/');
+        $endpoint = config('imgproxy.endpoint', 'http://localhost:8080');
+        $this->endpoint = rtrim(is_string($endpoint) ? $endpoint : 'http://localhost:8080', '/');
 
+        $modeRaw = config('imgproxy.default_source_url_mode', 'encoded');
         $this->defaultMode = SourceUrlMode::tryFrom(
-            (string) config('imgproxy.default_source_url_mode', 'encoded'),
+            is_string($modeRaw) ? $modeRaw : 'encoded',
         ) ?? SourceUrlMode::Encoded;
 
-        $defaultExt = (string) config('imgproxy.default_output_extension', '');
+        $defaultExt = config('imgproxy.default_output_extension', '');
+        $defaultExt = is_string($defaultExt) ? $defaultExt : '';
         $this->defaultFormat = $defaultExt !== '' ? OutputFormat::tryFrom($defaultExt) : null;
 
         // Decode hex key/salt — ตรวจ validity ก่อน hex2bin เพื่อป้องกัน warning
-        $rawKey = trim((string) config('imgproxy.key', ''));
-        $rawSalt = trim((string) config('imgproxy.salt', ''));
+        $keyRaw = config('imgproxy.key', '');
+        $saltRaw = config('imgproxy.salt', '');
+        $rawKey = trim(is_string($keyRaw) ? $keyRaw : '');
+        $rawSalt = trim(is_string($saltRaw) ? $saltRaw : '');
 
         $this->key = self::decodeHex($rawKey);
         $this->salt = self::decodeHex($rawSalt);
+
+        if ($rawKey !== '' && $this->key === '') {
+            Log::warning('ImgproxyService: IMGPROXY_KEY is configured but failed hex decode — URL signing disabled');
+        }
+
+        if ($rawSalt !== '' && $this->salt === '') {
+            Log::warning('ImgproxyService: IMGPROXY_SALT is configured but failed hex decode — URL signing disabled');
+        }
     }
 
     // =========================================================================

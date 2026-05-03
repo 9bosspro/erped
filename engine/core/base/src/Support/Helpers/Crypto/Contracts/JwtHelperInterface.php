@@ -30,7 +30,7 @@ interface JwtHelperInterface
 
     public function createRefreshToken(int $userId): string;
 
-    /** @return array{access_token: string, refresh_token: string, expires_in: int} */
+    /** @return array{access_token: string, refresh_token: string, token_type: string, expires_in: int} */
     public function issueTokenPair(int $userId, array $claims = []): array;
 
     public function buildCustomToken(mixed $data, int $ttl = 3600, array $claims = []): string;
@@ -62,7 +62,7 @@ interface JwtHelperInterface
 
     // ─── Token Refresh ──────────────────────────────────────────
 
-    /** @return array{access_token: string, refresh_token: string, expires_in: int} */
+    /** @return array{access_token: string, refresh_token: string, token_type: string, expires_in: int} */
     public function refreshTokenPair(string $refreshToken, array $claims = []): array;
 
     // ─── Claim Access ───────────────────────────────────────────
@@ -160,6 +160,23 @@ interface JwtHelperInterface
     public function getHeader(string $token): ?array;
 
     // ─── Utility ────────────────────────────────────────────────
+
+    /**
+     * ดึง claim 'data' จาก token — ตรวจ signature แต่ไม่ตรวจ expiry
+     *
+     * ⚠️ token หมดอายุก็สามารถดึงข้อมูลได้ — เหมาะสำหรับ custom token เท่านั้น
+     * สำหรับ auth จริงใช้ parse() แทน
+     *
+     * @throws \Core\Base\Exceptions\InvalidTokenException เมื่อ signature ไม่ถูกต้อง
+     */
+    public function parsedata(string $token): mixed;
+
+    /**
+     * สร้าง HMAC fingerprint ของ token ด้วย app.key
+     *
+     * ใช้สำหรับ: token deduplication, blacklist key, audit log
+     */
+    public function fingerprint(string $token): string;
 
     public function rawDecode(string $token): ?array;
 

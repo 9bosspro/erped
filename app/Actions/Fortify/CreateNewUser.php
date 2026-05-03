@@ -16,6 +16,7 @@ class CreateNewUser implements CreatesNewUsers
         private UserRepositoryInterface $userRepository,
     ) {}
 
+    /** @param array<string, mixed> $input */
     public function create(array $input): User
     {
         Validator::make($input, [

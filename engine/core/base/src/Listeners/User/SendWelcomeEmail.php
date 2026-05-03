@@ -77,6 +77,6 @@ class SendWelcomeEmail implements ShouldQueue
      */
     public function shouldQueue(UserRegistrationCompleted $event): bool
     {
-        return config('core.events.queue_emails', true);
+        return (bool) config('core.events.queue_emails', true);
     }
 }

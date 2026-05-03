@@ -9,6 +9,7 @@ use Core\Base\Services\Integration\CrossHostReceiver;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
@@ -35,10 +36,20 @@ class VerifyCrossHostSignature
      */
     public function handle(Request $request, Closure $next, string $mode = 'signed'): Response
     {
+        // ตรวจสอบ mode ที่รองรับ — ป้องกัน misconfiguration ใน route definition
+        if (! \in_array($mode, ['signed', 'sealed'], strict: true)) {
+            throw new InvalidArgumentException("VerifyCrossHostSignature: mode ไม่รองรับ '{$mode}' — ใช้ 'signed' หรือ 'sealed'");
+        }
+
         // ดึงค่าจาก config เท่านั้น (ห้ามใช้ env() โดยตรง — จะพังหลัง config:cache)
-        $sharedSecret = (string) config('services.crosshost.shared_secret', '');
-        $privateKey = (string) config('services.crosshost.private_key', '');
-        $timestampTtl = (int) config('services.crosshost.timestamp_ttl', 300);
+        $sharedSecretVal = config('services.crosshost.shared_secret', '');
+        $sharedSecret = \is_scalar($sharedSecretVal) ? (string) $sharedSecretVal : '';
+
+        $privateKeyVal = config('services.crosshost.private_key', '');
+        $privateKey = \is_scalar($privateKeyVal) ? (string) $privateKeyVal : '';
+
+        $timestampTtlVal = config('services.crosshost.timestamp_ttl', 300);
+        $timestampTtl = \is_scalar($timestampTtlVal) ? (int) $timestampTtlVal : 300;
 
         if (empty($sharedSecret)) {
             Log::critical('CrossHost middleware: CROSSHOST_SHARED_SECRET is not configured');

@@ -7,6 +7,7 @@ namespace Core\Base\Services\Security;
 use Core\Base\Services\Security\Contracts\TokenBlacklistServiceInterface;
 use Core\Base\Support\Helpers\Crypto\JwtHelper;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use RuntimeException;
 
@@ -39,8 +40,11 @@ final class TokenBlacklistService implements TokenBlacklistServiceInterface
     public function __construct(
         private readonly JwtHelper $jwtHelper,
     ) {
-        $this->connection = (string) config('core.base::crypto.jwt.blacklist_connection', 'default');
-        $this->prefix = (string) config('core.base::crypto.jwt.blacklist_prefix', 'jwt:blacklist:');
+        $conn = config('core.base::crypto.jwt.blacklist_connection', 'default');
+        $this->connection = \is_string($conn) ? $conn : 'default';
+
+        $pref = config('core.base::crypto.jwt.blacklist_prefix', 'jwt:blacklist:');
+        $this->prefix = \is_string($pref) ? $pref : 'jwt:blacklist:';
     }
 
     /**
@@ -52,6 +56,12 @@ final class TokenBlacklistService implements TokenBlacklistServiceInterface
     public function revoke(string $jti, int $ttl): void
     {
         if ($jti === '' || $ttl <= 0) {
+            Log::warning('TOKEN_BLACKLIST_REVOKE_SKIPPED', [
+                'jti' => $jti === '' ? '(empty)' : $jti,
+                'ttl' => $ttl,
+                'reason' => $jti === '' ? 'empty JTI' : 'TTL <= 0 (token already expired)',
+            ]);
+
             return;
         }
 
@@ -111,8 +121,8 @@ final class TokenBlacklistService implements TokenBlacklistServiceInterface
             return true;
         }
 
-        return (bool) Redis::connection($this->connection)
-            ->exists($this->prefix.$jti);
+        return Redis::connection($this->connection)
+            ->exists("{$this->prefix}{$jti}") > 0;
     }
 
     /**

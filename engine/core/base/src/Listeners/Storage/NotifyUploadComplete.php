@@ -7,6 +7,7 @@ namespace Core\Base\Listeners\Storage;
 use Core\Base\Events\Storage\ChunkedUploadCompleted;
 use Core\Base\Events\Storage\FileUploadCompleted;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Events\Dispatcher;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -57,7 +58,12 @@ class NotifyUploadComplete implements ShouldQueue
     /**
      * Register the listeners for the subscriber.
      */
-    public function subscribe($events): array
+    /**
+     * ลงทะเบียน listeners สำหรับ subscriber
+     *
+     * @return array<class-string, string>
+     */
+    public function subscribe(Dispatcher $events): array
     {
         return [
             FileUploadCompleted::class => 'handleFileUpload',
@@ -66,10 +72,10 @@ class NotifyUploadComplete implements ShouldQueue
     }
 
     /**
-     * Determine whether the listener should be queued.
+     * กำหนดว่า listener ควร queue หรือไม่
      */
-    public function shouldQueue($event): bool
+    public function shouldQueue(FileUploadCompleted|ChunkedUploadCompleted $event): bool
     {
-        return config('core.events.queue_notifications', true);
+        return (bool) config('core.events.queue_notifications', true);
     }
 }

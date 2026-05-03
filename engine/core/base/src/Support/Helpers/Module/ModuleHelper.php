@@ -466,6 +466,7 @@ final class ModuleHelper implements ModuleHelperInterface
         }
 
         // 1. ตรวจจาก controller namespace
+        /** @var array<string, mixed> $action */
         $action = $route->getAction();
         $controller = $action['controller'] ?? $action['uses'] ?? null;
 
@@ -779,7 +780,9 @@ final class ModuleHelper implements ModuleHelperInterface
      */
     private function getModulesNamespace(): string
     {
-        return rtrim((string) config('modules.namespace', 'Modules'), '\\');
+        $ns = config('modules.namespace', 'Modules');
+
+        return rtrim(is_string($ns) ? $ns : 'Modules', '\\');
     }
 
     /**

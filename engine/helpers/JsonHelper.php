@@ -11,18 +11,27 @@ declare(strict_types=1);
 |
 */
 if (! function_exists('return_success')) {
+    /**
+     * @return array<string, mixed>
+     */
     function return_success(string $message, mixed $data, int $code = 200): array
     {
         return Core\Base\DTO\ServiceResult::success($data, $message, $code)->toArray();
     }
 }
 if (! function_exists('return_error')) {
+    /**
+     * @return array<string, mixed>
+     */
     function return_error(string $message, mixed $data = null, int $code = 400): array
     {
         return Core\Base\DTO\ServiceResult::error($message, $code, $data)->toArray();
     }
 }
 if (! function_exists('presponsesuccess')) {
+    /**
+     * @return array<string, mixed>
+     */
     function presponsesuccess(?string $message, mixed $data = null): array
     {
         return Core\Base\DTO\ServiceResult::success($data, $message ?? 'Success')->toArray();
@@ -30,6 +39,9 @@ if (! function_exists('presponsesuccess')) {
 }
 
 if (! function_exists('presponseerror')) {
+    /**
+     * @return array<string, mixed>
+     */
     function presponseerror(?string $message, mixed $data = null): array
     {
         return Core\Base\DTO\ServiceResult::error($message ?? 'Error', 400, $data)->toArray();
@@ -42,13 +54,7 @@ if (! function_exists('is_jsons')) {
      */
     function is_jsons(string $string): bool
     {
-        if ($string === '') {
-            return false;
-        }
-
-        json_decode($string);
-
-        return json_last_error() === JSON_ERROR_NONE;
+        return $string !== '' && json_validate($string);
     }
 }
 

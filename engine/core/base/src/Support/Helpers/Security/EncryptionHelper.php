@@ -83,12 +83,13 @@ final class EncryptionHelper implements EncryptionHelperInterface
 
     private const VERSION = 1;
 
-    private readonly string $appKey;
+    private readonly ?string $appKey;
 
     public function __construct()
     {
-        $rawKey = (string) config('app.key', '');
-        $this->appKey = $this->parseKey($rawKey);
+        $rawKey = config('app.key', '');
+        $rawKeyStr = is_string($rawKey) ? $rawKey : '';
+        $this->appKey = $this->parseKey($rawKeyStr);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -97,19 +98,19 @@ final class EncryptionHelper implements EncryptionHelperInterface
 
     public function encrypt(mixed $data, ?string $key = null): string
     {
-        return $this->doEncryptGcm($this->serialize($data), $this->resolveKey($key));
+        return $this->doEncryptGcm($this->serialize($data), self::decodeKey($key));
     }
 
     public function decrypt(string $encrypted, ?string $key = null): mixed
     {
         return $this->deserialize(
-            $this->doDecryptGcm($encrypted, $this->resolveKey($key)),
+            $this->doDecryptGcm($encrypted, self::decodeKey($key)),
         );
     }
 
-    public function encryptWithAad(mixed $data, string $aad, ?string $key = null): string
+    public function encryptWithAad(mixed $data, string $aad, ?string $key = null, bool $useBinary = false): string
     {
-        $resolvedKey = $this->resolveKey($key);
+        $resolvedKey = self::decodeKey($key);
         $plaintext = $this->serialize($data);
         $iv = random_bytes(self::GCM_IV_LENGTH);
         $tag = '';
@@ -132,10 +133,10 @@ final class EncryptionHelper implements EncryptionHelperInterface
         return $this->encodeEnvelope([
             'v' => self::VERSION,
             'cipher' => 'gcm-aad',
-            'iv' => $this->encodeb64($iv),
-            'tag' => $this->encodeb64($tag),
-            'aad_hash' => $this->encodeb64(hash('sha256', $aad, true)),
-            'data' => $this->encodeb64($ciphertext),
+            'iv' => self::encodeKey($iv, $useBinary),
+            'tag' => self::encodeKey($tag, $useBinary),
+            'aad_hash' => self::encodeKey(hash('sha256', $aad, true), $useBinary),
+            'data' => self::encodeKey($ciphertext, $useBinary),
         ]);
     }
 
@@ -144,10 +145,10 @@ final class EncryptionHelper implements EncryptionHelperInterface
         $envelope = $this->decodeEnvelope($encrypted);
         $this->assertEnvelopeFields($envelope, ['iv', 'tag', 'data']);
 
-        $resolvedKey = $this->resolveKey($key);
-        $iv = $this->safeBase64Decode($envelope['iv'], 'iv');
-        $tag = $this->safeBase64Decode($envelope['tag'], 'tag');
-        $ciphertext = $this->safeBase64Decode($envelope['data'], 'data');
+        $resolvedKey = self::decodeKey($key);
+        $iv = self::decodeKey($envelope['iv']);
+        $tag = self::decodeKey($envelope['tag']);
+        $ciphertext = self::decodeKey($envelope['data']);
 
         $plaintext = openssl_decrypt(
             $ciphertext,
@@ -170,12 +171,12 @@ final class EncryptionHelper implements EncryptionHelperInterface
     //  AES-256-CBC + HMAC
     // ═══════════════════════════════════════════════════════════
 
-    public function encryptCbc(mixed $data, ?string $key = null): string
+    public function encryptCbc(mixed $data, ?string $key = null, bool $useBinary = false): string
     {
         $plaintext = $this->serialize($data);
-        $resolvedKey = $this->resolveKey($key);
+        $resolvedKey = self::decodeKey($key);
         $iv = random_bytes(self::CBC_IV_LENGTH);
-
+        $tag = self::encodeKey($plaintext, $useBinary);
         $ciphertext = openssl_encrypt(
             $plaintext,
             self::CIPHER_CBC,
@@ -193,9 +194,9 @@ final class EncryptionHelper implements EncryptionHelperInterface
         return $this->encodeEnvelope([
             'v' => self::VERSION,
             'cipher' => 'cbc',
-            'iv' => self::encode($iv),
-            'mac' => self::encode($mac),
-            'data' => self::encode($ciphertext),
+            'iv' => self::encodeKey($iv, $useBinary),
+            'mac' => self::encodeKey($mac, $useBinary),
+            'data' => self::encodeKey($ciphertext, $useBinary),
         ]);
     }
 
@@ -204,10 +205,10 @@ final class EncryptionHelper implements EncryptionHelperInterface
         $envelope = $this->decodeEnvelope($encrypted);
         $this->assertEnvelopeFields($envelope, ['iv', 'mac', 'data']);
 
-        $resolvedKey = $this->resolveKey($key);
-        $iv = $this->safeBase64Decode($envelope['iv'], 'iv');
-        $mac = $this->safeBase64Decode($envelope['mac'], 'mac');
-        $ciphertext = $this->safeBase64Decode($envelope['data'], 'data');
+        $resolvedKey = self::decodeKey($key);
+        $iv = self::decodeKey($envelope['iv']);
+        $mac = self::decodeKey($envelope['mac']);
+        $ciphertext = self::decodeKey($envelope['data']);
 
         $expectedMac = hash_hmac('sha256', $iv.$ciphertext, $resolvedKey, true);
 
@@ -286,10 +287,10 @@ final class EncryptionHelper implements EncryptionHelperInterface
     //  Deterministic (searchable fields)
     // ═══════════════════════════════════════════════════════════
 
-    public function encryptDeterministic(mixed $data, ?string $key = null): string
+    public function encryptDeterministic(mixed $data, ?string $key = null, bool $useBinary = false): string
     {
         $plaintext = $this->serialize($data);
-        $resolvedKey = $this->resolveKey($key);
+        $resolvedKey = self::decodeKey($key);
 
         $syntheticIv = substr(
             hash_hmac('sha256', $plaintext, $resolvedKey, true),
@@ -319,21 +320,21 @@ final class EncryptionHelper implements EncryptionHelperInterface
         return $this->encodeEnvelope([
             'v' => self::VERSION,
             'cipher' => 'det-gcm',
-            'iv' => self::encode($syntheticIv),
-            'tag' => self::encode($tag),
-            'data' => self::encode($ciphertext),
+            'iv' => self::encodeKey($syntheticIv, $useBinary),
+            'tag' => self::encodeKey($tag, $useBinary),
+            'data' => self::encodeKey($ciphertext, $useBinary),
         ]);
     }
 
-    public function decryptDeterministic(string $encrypted, ?string $key = null): mixed
+    public function decryptDeterministic(string $encrypted, ?string $key = null, bool $useBinary = false): mixed
     {
         $envelope = $this->decodeEnvelope($encrypted);
         $this->assertEnvelopeFields($envelope, ['iv', 'tag', 'data']);
 
-        $resolvedKey = $this->resolveKey($key);
-        $iv = $this->safeBase64Decode($envelope['iv'], 'iv');
-        $tag = $this->safeBase64Decode($envelope['tag'], 'tag');
-        $ciphertext = $this->safeBase64Decode($envelope['data'], 'data');
+        $resolvedKey = self::decodeKey($key);
+        $iv = self::decodeKey($envelope['iv']);
+        $tag = self::decodeKey($envelope['tag']);
+        $ciphertext = self::decodeKey($envelope['data']);
 
         $plaintext = openssl_decrypt(
             $ciphertext,
@@ -377,7 +378,8 @@ final class EncryptionHelper implements EncryptionHelperInterface
             throw new RuntimeException('Invalid expiring payload format');
         }
 
-        if (time() > (int) $wrapper['_exp']) {
+        $exp = $wrapper['_exp'] ?? 0;
+        if (is_scalar($exp) && time() > (int) $exp) {
             throw new RuntimeException('Encrypted token has expired');
         }
 
@@ -522,7 +524,9 @@ final class EncryptionHelper implements EncryptionHelperInterface
 
     public function base64UrlDecode(string $data): string
     {
-        return self::decodeUrlSafe($data);
+        $result = self::decodeUrlSafe($data);
+
+        return $result !== false ? $result : '';
     }
 
     public function getAvailableCiphers(): array
@@ -587,20 +591,9 @@ final class EncryptionHelper implements EncryptionHelperInterface
         return $plaintext;
     }
 
-    private function resolveKey(?string $key): string
-    {
-        $resolved = $key !== null ? $this->parseKey($key) : $this->appKey;
-
-        if ($resolved === '') {
-            throw new InvalidArgumentException('Encryption key is required');
-        }
-
-        return $resolved;
-    }
-
     private function deriveSodiumKey(?string $key): string
     {
-        $resolved = $this->resolveKey($key);
+        $resolved = self::decodeKey($key);
 
         if (strlen($resolved) !== SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_KEYBYTES) {
             return hash('sha256', $resolved, true);

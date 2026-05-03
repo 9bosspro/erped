@@ -13,24 +13,26 @@ use Illuminate\Support\Facades\DB;
  * CacheTrait — ฟังก์ชัน cache เบื้องต้นสำหรับ class ที่ต้องการ cache response/query
  *
  * หมายเหตุ: สำหรับ use case ที่ซับซ้อนกว่า ให้ inject CacheManager แทน
+ *
+ * @experimental ยังไม่มี usage ในโปรเจค — cacheQuery() ใช้ raw SQL ที่มีความเสี่ยง ควรใช้ Eloquent/QueryBuilder แทน
  */
 trait CacheTrait
 {
     /**
      * ดึงผลลัพธ์ raw SQL จาก cache หรือ query แล้ว cache ผลลัพธ์
      *
-     * ⚠️ ใช้ DB::select() กับ raw SQL ที่ไว้ใจได้เท่านั้น (static queries)
-     *    ห้ามส่ง user input ลง $sql โดยตรง — ให้ใช้ bindings แทน
+     * ⚠️ ห้ามส่ง user input ลง $sql โดยตรง — ให้ใช้ $bindings แทน
      *
      * @param  string  $key  cache key
-     * @param  string  $sql  raw SQL query (ต้องไม่รับ user input โดยตรง)
+     * @param  string  $sql  raw SQL query พร้อม placeholders (ต้องไม่รับ user input โดยตรง)
+     * @param  array<mixed>  $bindings  PDO bindings สำหรับ $sql
      * @param  int  $seconds  TTL เป็นวินาที (default: 60)
      * @return array<mixed> ผลลัพธ์จาก query
      */
-    protected function cacheQuery(string $key, string $sql, int $seconds = 60): array
+    protected function cacheQuery(string $key, string $sql, array $bindings = [], int $seconds = 60): array
     {
         /** @var array<mixed> */
-        return Cache::remember($key, $seconds, fn (): array => DB::select($sql));
+        return Cache::remember($key, $seconds, fn (): array => DB::select($sql, $bindings));
     }
 
     /**

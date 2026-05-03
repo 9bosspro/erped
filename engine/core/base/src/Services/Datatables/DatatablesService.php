@@ -37,11 +37,12 @@ class DatatablesService
         array $options,
         Request $request,
     ): JsonResponse {
-        $draw = (int) ($request->input('draw', 0));
-        $start = max(0, (int) ($request->input('start', 0)));
-        $length = (int) ($request->input('length', 0));
-        $searchValue = (string) ($request->input('search.value', ''));
-        $orderParams = $request->input('order', []);
+        $draw = $request->integer('draw', 0);
+        $start = max(0, $request->integer('start', 0));
+        $length = $request->integer('length', 0);
+        $searchValue = $request->string('search.value', '')->toString();
+        $orderRaw = $request->input('order', []);
+        $orderParams = is_array($orderRaw) ? $orderRaw : [];
 
         // นับ total ก่อน filter
         $totalAll = (clone $query)->count();
@@ -91,7 +92,8 @@ class DatatablesService
         $result = [];
 
         foreach ($data as $item) {
-            $groupKey = $item[$key] ?? '';
+            $keyValue = $item[$key] ?? '';
+            $groupKey = is_scalar($keyValue) ? (string) $keyValue : '';
             $result[$groupKey][] = $item;
         }
 

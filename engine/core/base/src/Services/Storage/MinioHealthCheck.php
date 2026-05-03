@@ -6,6 +6,7 @@ namespace Core\Base\Services\Storage;
 
 use Aws\Exception\AwsException;
 use Aws\S3\S3Client;
+use DateTimeInterface;
 use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
@@ -45,14 +46,27 @@ class MinioHealthCheck
     public function __construct(?string $disk = null)
     {
         $this->disk = $disk ?? 'minio';
-        $this->config = config("filesystems.disks.{$this->disk}", []);
+        /** @var array<string, mixed> $config */
+        $config = config("filesystems.disks.{$this->disk}", []);
+        $this->config = $config;
         $this->initializeS3Client();
     }
 
     /**
      * ตรวจสุขภาพครบทุกด้าน (config, connection, bucket, permissions)
      *
-     * @return array{disk: string, timestamp: string, checks: array, latency_ms: float|null, healthy: bool}
+     * @return array{
+     *   disk: string,
+     *   timestamp: string,
+     *   checks: array{
+     *     config: array{passed: bool, missing_keys: string[], warnings: string[], endpoint: string|null, bucket: string|null, region: string},
+     *     connection: array{passed: bool, message: string, latency_ms: float|null},
+     *     bucket: array{passed: bool, bucket: string, exists: bool, message: string},
+     *     permissions: array{passed: bool, can_read: bool, can_write: bool, can_delete: bool, message: string}
+     *   },
+     *   latency_ms: float|null,
+     *   healthy: bool
+     * }
      */
     public function check(): array
     {
@@ -88,7 +102,11 @@ class MinioHealthCheck
         $cacheKey = "minio_health:{$this->disk}";
 
         if ($useCache && Cache::has($cacheKey)) {
-            return Cache::get($cacheKey);
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached)) {
+                /** @var array{healthy: bool, latency_ms: float|null, message: string, timestamp: string} $cached */
+                return $cached;
+            }
         }
 
         $startTime = microtime(true);
@@ -142,7 +160,8 @@ class MinioHealthCheck
         }
 
         if (! empty($this->config['endpoint'])) {
-            $endpoint = $this->config['endpoint'];
+            $endpointVal = $this->config['endpoint'];
+            $endpoint = is_scalar($endpointVal) ? (string) $endpointVal : '';
 
             if (! filter_var($endpoint, FILTER_VALIDATE_URL)) {
                 $warnings[] = "Invalid endpoint URL format: {$endpoint}";
@@ -161,9 +180,9 @@ class MinioHealthCheck
             'passed' => empty($missing),
             'missing_keys' => $missing,
             'warnings' => $warnings,
-            'endpoint' => $this->config['endpoint'] ?? null,
-            'bucket' => $this->config['bucket'] ?? null,
-            'region' => $this->config['region'] ?? 'us-east-1',
+            'endpoint' => isset($this->config['endpoint']) && is_scalar($this->config['endpoint']) ? (string) $this->config['endpoint'] : null,
+            'bucket' => isset($this->config['bucket']) && is_scalar($this->config['bucket']) ? (string) $this->config['bucket'] : null,
+            'region' => isset($this->config['region']) && is_scalar($this->config['region']) ? (string) $this->config['region'] : 'us-east-1',
         ];
     }
 
@@ -213,7 +232,8 @@ class MinioHealthCheck
      */
     public function checkBucket(): array
     {
-        $bucket = $this->config['bucket'] ?? '';
+        $bucketVal = $this->config['bucket'] ?? '';
+        $bucket = is_scalar($bucketVal) ? (string) $bucketVal : '';
         $result = [
             'passed' => false,
             'bucket' => $bucket,
@@ -308,7 +328,8 @@ class MinioHealthCheck
      */
     public function getBucketStats(): array
     {
-        $bucket = $this->config['bucket'] ?? '';
+        $bucketVal = $this->config['bucket'] ?? '';
+        $bucket = is_scalar($bucketVal) ? (string) $bucketVal : '';
         $stats = [
             'bucket' => $bucket,
             'total_objects' => 0,
@@ -321,21 +342,22 @@ class MinioHealthCheck
         }
 
         try {
-            $objects = $this->s3Client->listObjectsV2([
+            $objects = (array) $this->s3Client->listObjectsV2([
                 'Bucket' => $bucket,
             ]);
 
             $totalSize = 0;
             $count = 0;
 
-            foreach ($objects['Contents'] ?? [] as $object) {
-                $totalSize += $object['Size'] ?? 0;
+            foreach ((array) ($objects['Contents'] ?? []) as $object) {
+                $objectArray = (array) $object;
+                $totalSize += (int) ($objectArray['Size'] ?? 0);
                 $count++;
             }
 
             $stats['total_objects'] = $count;
             $stats['total_size_bytes'] = $totalSize;
-            $stats['total_size_human'] = $this->formatBytes($totalSize);
+            $stats['total_size_human'] = $this->formatBytes((int) $totalSize);
 
         } catch (Exception $e) {
             $stats['error'] = $e->getMessage();
@@ -356,13 +378,17 @@ class MinioHealthCheck
         }
 
         try {
-            $result = $this->s3Client->listBuckets();
+            $result = (array) $this->s3Client->listBuckets();
             $buckets = [];
 
-            foreach ($result['Buckets'] ?? [] as $bucket) {
+            foreach ((array) ($result['Buckets'] ?? []) as $bucket) {
+                $bucketArray = (array) $bucket;
+                $creationDate = $bucketArray['CreationDate'] ?? null;
                 $buckets[] = [
-                    'name' => $bucket['Name'],
-                    'created' => $bucket['CreationDate']?->format('Y-m-d H:i:s'),
+                    'name' => (string) ($bucketArray['Name'] ?? ''),
+                    'created' => ($creationDate instanceof DateTimeInterface)
+                        ? $creationDate->format('Y-m-d H:i:s')
+                        : null,
                 ];
             }
 
@@ -383,7 +409,8 @@ class MinioHealthCheck
      */
     public function ensureBucketExists(?string $bucketName = null): array
     {
-        $bucket = $bucketName ?? ($this->config['bucket'] ?? '');
+        $bucketRaw = $this->config['bucket'] ?? '';
+        $bucket = $bucketName ?? (is_scalar($bucketRaw) ? (string) $bucketRaw : '');
 
         if (empty($bucket)) {
             return ['success' => false, 'message' => 'Bucket name required'];
@@ -408,7 +435,7 @@ class MinioHealthCheck
                 }
             }
 
-            return ['success' => false, 'message' => $e->getAwsErrorMessage()];
+            return ['success' => false, 'message' => $e->getAwsErrorMessage() ?? ''];
         }
     }
 
@@ -419,17 +446,17 @@ class MinioHealthCheck
     {
         if (! empty($this->config) && ($this->config['driver'] ?? '') === 's3') {
             try {
-                $httpOptions = $this->config['http'] ?? [];
+                $httpOptions = (array) ($this->config['http'] ?? []);
                 $verify = $httpOptions['verify'] ?? true;
 
                 $this->s3Client = new S3Client([
                     'version' => 'latest',
-                    'region' => $this->config['region'] ?? 'us-east-1',
-                    'endpoint' => $this->config['endpoint'] ?? null,
-                    'use_path_style_endpoint' => $this->config['use_path_style_endpoint'] ?? true,
+                    'region' => isset($this->config['region']) && is_scalar($this->config['region']) ? (string) $this->config['region'] : 'us-east-1',
+                    'endpoint' => isset($this->config['endpoint']) && is_scalar($this->config['endpoint']) ? (string) $this->config['endpoint'] : null,
+                    'use_path_style_endpoint' => (bool) ($this->config['use_path_style_endpoint'] ?? true),
                     'credentials' => [
-                        'key' => $this->config['key'] ?? '',
-                        'secret' => $this->config['secret'] ?? '',
+                        'key' => isset($this->config['key']) && is_scalar($this->config['key']) ? (string) $this->config['key'] : '',
+                        'secret' => isset($this->config['secret']) && is_scalar($this->config['secret']) ? (string) $this->config['secret'] : '',
                     ],
                     'http' => [
                         'verify' => $verify,
@@ -464,12 +491,13 @@ class MinioHealthCheck
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $i = 0;
+        $size = (float) $bytes;
 
-        while ($bytes >= 1024 && $i < count($units) - 1) {
-            $bytes /= 1024;
+        while ($size >= 1024.0 && $i < count($units) - 1) {
+            $size /= 1024.0;
             $i++;
         }
 
-        return round($bytes, 2).' '.$units[$i];
+        return round($size, 2).' '.$units[$i];
     }
 }

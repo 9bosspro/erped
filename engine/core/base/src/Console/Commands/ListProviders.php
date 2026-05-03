@@ -1,50 +1,43 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Core\Base\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\ServiceProvider;
 use ReflectionClass;
 
 class ListProviders extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string providers:list  app:list-providers
-     */
-    protected $signature = 'providers:lists';
+    protected $signature = 'providers:list';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Command description';
+    protected $description = 'List all registered service providers';
 
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(): int
     {
-        //
-        $app = $this->laravel; // หรือ app()
+        $app = $this->laravel;
         $reflection = new ReflectionClass($app);
-        $providersProperty = $reflection->getProperty('serviceProviders');
-        $providersProperty->setAccessible(true);
-        $providers = $providersProperty->getValue($app);
+        $property = $reflection->getProperty('serviceProviders');
+        $property->setAccessible(true);
+
+        /** @var ServiceProvider[] $providers */
+        $providers = $property->getValue($app);
 
         if (empty($providers)) {
             $this->info('No providers registered.');
 
-            return;
+            return self::SUCCESS;
         }
 
-        $this->info('Registered Service Providers:');
+        $rows = [];
         foreach ($providers as $index => $provider) {
-            $this->info('==> '.$index);
-            //  $this->line(sprintf('%d. %s', $index + 1, get_class($provider)));
-
-            // $this->line(sprintf('%d. %s', $index + 1, get_class($provider)));
+            $rows[] = [(int) $index + 1, $provider::class];
         }
+
+        $this->table(['#', 'Provider'], $rows);
+        $this->line(sprintf('Total: %d providers', count($providers)));
+
+        return self::SUCCESS;
     }
 }

@@ -1,0 +1,32 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/
+        - engine/slave/src
+        - engine/modules
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+
+    level: 9
+
+    parallel:
+        maximumNumberOfProcesses: 1
+        processTimeout: 60.0
+
+    phpVersion: 80300
+
+    ignoreErrors:
+
+    excludePaths:
+        - vendor/
+        - node_modules/
+        - engine/modules/*/Tests/*
+        - engine/modules/*/database/*
+        - engine/modules/*/resources/*
+        - engine/themes/*
+        - storage/*
+        - bootstrap/cache/*
+        - **/_ide_helper*.php
+        - **/_ide_helper_models.php

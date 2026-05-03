@@ -264,16 +264,16 @@ trait LoadAndPublishDataTrait
     /**
      * โหลดการจำลองข้อมูลสำหรับ Database (Factories)
      */
-    public function loadFactories(): static
-    {
-        $path = $this->getFactoriesPath();
+    /*  public function loadFactories(): static
+     {
+         $path = $this->getFactoriesPath();
 
-        if (is_dir($path)) {
-            $this->loadFactoriesFrom($path);
-        }
+         if (is_dir($path)) {
+             $this->loadFactoriesFrom($path);
+         }
 
-        return $this;
-    }
+         return $this;
+     } */
 
     /**
      * โหลดชุดตัวอย่างข้อมูลเริ่มต้น (Seeders)
@@ -405,8 +405,8 @@ trait LoadAndPublishDataTrait
         $current = (string) @ini_get('memory_limit');
         $currentBytes = $helper->convertHrToBytes($current);
 
-        $configured = Arr::get($config, 'memory_limit')
-            ?? ($helper->isIniValueChangeable('memory_limit') ? '1024M' : $current);
+        $configVal = Arr::get($config, 'memory_limit');
+        $configured = is_scalar($configVal) ? (string) $configVal : ($helper->isIniValueChangeable('memory_limit') ? '1024M' : $current);
         $configBytes = $helper->convertHrToBytes($configured);
 
         if ($currentBytes !== -1 && ($configBytes === -1 || $configBytes > $currentBytes)) {
@@ -421,7 +421,8 @@ trait LoadAndPublishDataTrait
     private function applyMaxExecutionTime(PhpConfigManager $helper, array $config): void
     {
         $current = (int) @ini_get('max_execution_time');
-        $configured = (int) Arr::get($config, 'max_execution_time', 0);
+        $confVal = Arr::get($config, 'max_execution_time', 0);
+        $configured = is_scalar($confVal) ? (int) $confVal : 0;
 
         if ($current > 0 && $configured > $current) {
             $helper->iniSet('max_execution_time', (string) $configured);

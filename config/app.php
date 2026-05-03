@@ -125,4 +125,16 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Trusted Proxies
+    |--------------------------------------------------------------------------
+    |
+    | รายการ IP/CIDR ของ proxy ที่ไว้ใจได้ (Nginx, Load Balancer, Docker)
+    | ใช้สำหรับให้ request()->ip() คืน IP จริงของ client ผ่าน X-Forwarded-For
+    |
+    */
+
+    'trusted_proxies' => explode(',', (string) env('TRUSTED_PROXIES', '172.17.0.0/24')),
+
 ];

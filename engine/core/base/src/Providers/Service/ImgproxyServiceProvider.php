@@ -6,7 +6,6 @@ namespace Core\Base\Providers\Service;
 
 use Core\Base\Services\Imgproxy\Contracts\ImgproxyServiceInterface;
 use Core\Base\Services\Imgproxy\ImgproxyService;
-use Core\Base\Traits\LoadAndPublishDataTrait;
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
 
@@ -20,15 +19,13 @@ use Illuminate\Support\ServiceProvider;
  */
 class ImgproxyServiceProvider extends ServiceProvider implements DeferrableProvider
 {
-    //  use LoadAndPublishDataTrait;
-    protected const PACKAGE_NAME = 'ppp-base-imgproxy';
+    protected const string PACKAGE_NAME = 'ppp-base-imgproxy';
 
     /**
      * ลงทะเบียน services เข้า container
      */
     public function register(): void
     {
-        //  $this->setNamespace('Core\Base');
         $this->app->singleton(ImgproxyService::class);
         $this->app->alias(ImgproxyService::class, 'core.imgproxy');
         $this->app->alias(ImgproxyService::class, ImgproxyServiceInterface::class);
@@ -44,8 +41,8 @@ class ImgproxyServiceProvider extends ServiceProvider implements DeferrableProvi
     {
         return [
             ImgproxyService::class,
-            'core.imgproxy',
             ImgproxyServiceInterface::class,
+            'core.imgproxy',
         ];
     }
 }

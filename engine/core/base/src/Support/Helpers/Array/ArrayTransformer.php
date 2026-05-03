@@ -263,7 +263,10 @@ final class ArrayTransformer
 
         foreach ($array as $item) {
             if (is_array($item) && isset($item[$key])) {
-                $result[$item[$key]][] = $item;
+                $groupKey = is_scalar($item[$key]) ? (string) $item[$key] : '';
+                if ($groupKey !== '') {
+                    $result[$groupKey][] = $item;
+                }
             }
         }
 

@@ -42,10 +42,11 @@ final class AppContext
     public function getAppKey(): ?string
     {
         $appKey = config('app.key', '');
+        $appKeyStr = is_scalar($appKey) ? (string) $appKey : '';
 
-        return Str::startsWith($appKey, 'base64:')
-            ? base64_decode(substr($appKey, 7)) ?: null
-            : ($appKey ?: null);
+        return Str::startsWith($appKeyStr, 'base64:')
+            ? base64_decode(substr($appKeyStr, 7)) ?: null
+            : ($appKeyStr ?: null);
     }
 
     /**
@@ -92,9 +93,9 @@ final class AppContext
     public function generateSlug(string $string): string
     {
         // ลบอักขระพิเศษ (คง Unicode letters + numbers + spaces)
-        $string = preg_replace('/[^\p{L}\p{N}\s]/u', '', $string);
+        $string = (string) preg_replace('/[^\p{L}\p{N}\s]/u', '', $string);
         // เปลี่ยน whitespace → "-"
-        $string = preg_replace('/\s+/u', '-', trim($string));
+        $string = (string) preg_replace('/\s+/u', '-', trim($string));
 
         return mb_strtolower($string);
     }

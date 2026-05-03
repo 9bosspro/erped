@@ -503,7 +503,7 @@ return [
         // Media types
         'image' => App\Models\Image::class,
         'video' => App\Models\Video::class,
-        'youtube' => App\Models\YouTube::class,
+        'youtube' => App\Models\YouTubes::class,
         'sounds' => App\Models\Sounds::class,
         'document' => App\Models\Document::class,
     ],

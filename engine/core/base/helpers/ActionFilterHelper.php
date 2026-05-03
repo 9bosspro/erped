@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Closure;
 use Core\Base\Facades\Action;
 use Core\Base\Facades\Filter;
 
@@ -27,19 +26,34 @@ use Core\Base\Facades\Filter;
 // Filter Helpers
 // =========================================================================
 
-if (! function_exists('add_filters')) {
+if (! function_exists('add_filter')) {
     /**
      * ลงทะเบียน filter listener สำหรับ hook ที่ระบุ
      *
      * Filter ใช้สำหรับ transform ค่าและคืนผลลัพธ์ที่แก้ไขแล้ว
      *
-     * @param  array|string  $hook  ชื่อ hook (หรือ array ของ hook หลายตัว)
-     * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
+     * @param  array<string>|string  $hook  ชื่อ hook (หรือ array ของ hook หลายตัว)
+     * @param  array<mixed>|callable|Closure|string  $callback  callback ที่จะรัน
      * @param  int  $priority  ลำดับการรัน (น้อย = รันก่อน, default: 10)
      * @param  int  $arguments  จำนวน argument ที่ callback รับ (default: 1)
      * @param  bool  $once  true = รันครั้งเดียวแล้วถอด listener
      * @param  string|null  $scope  จำกัด scope เช่น 'admin', 'frontend'
+     * @return string UUID ของ listener — ใช้ remove_filter() เพื่อลบ
      */
+    function add_filter(
+        string|array $hook,
+        string|array|Closure|callable $callback,
+        int $priority = 10,
+        int $arguments = 1,
+        bool $once = false,
+        ?string $scope = null,
+    ): string {
+        return Filter::addListener($hook, $callback, $priority, $arguments, $once, $scope);
+    }
+}
+
+if (! function_exists('add_filters')) {
+    /** @deprecated ใช้ add_filter() แทน */
     function add_filters(
         string|array $hook,
         string|array|Closure|callable $callback,
@@ -47,8 +61,8 @@ if (! function_exists('add_filters')) {
         int $arguments = 1,
         bool $once = false,
         ?string $scope = null,
-    ): void {
-        Filter::addListener($hook, $callback, $priority, $arguments, $once, $scope);
+    ): string {
+        return add_filter($hook, $callback, $priority, $arguments, $once, $scope);
     }
 }
 
@@ -56,7 +70,7 @@ if (! function_exists('remove_filter')) {
     /**
      * ถอด filter listeners ออกจาก hook ที่ระบุ
      *
-     * @param  array|string|null  $hook  ชื่อ hook (null = ถอดทุก hook)
+     * @param  array<string>|string|null  $hook  ชื่อ hook (null = ถอดทุก hook)
      * @param  string|null  $id  UUID ของ listener ที่ต้องการถอด (null = ถอดทั้งหมดของ hook)
      */
     function remove_filter(string|array|null $hook = null, ?string $id = null): void
@@ -103,12 +117,13 @@ if (! function_exists('add_action')) {
      *
      * Action ใช้สำหรับ side-effects (logging, notifications) — ไม่คืนค่า
      *
-     * @param  array|string  $hook  ชื่อ hook
-     * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
+     * @param  array<string>|string  $hook  ชื่อ hook
+     * @param  array<mixed>|callable|Closure|string  $callback  callback ที่จะรัน
      * @param  int  $priority  ลำดับการรัน (น้อย = รันก่อน, default: 10)
      * @param  int  $arguments  จำนวน argument ที่ callback รับ
      * @param  bool  $once  true = รันครั้งเดียวแล้วถอด listener
      * @param  string|null  $scope  จำกัด scope เช่น 'admin', 'frontend'
+     * @return string UUID ของ listener — ใช้ remove_filter() เพื่อลบ
      */
     function add_action(
         string|array $hook,
@@ -117,8 +132,8 @@ if (! function_exists('add_action')) {
         int $arguments = 1,
         bool $once = false,
         ?string $scope = null,
-    ): void {
-        Action::addListener($hook, $callback, $priority, $arguments, $once, $scope);
+    ): string {
+        return Action::addListener($hook, $callback, $priority, $arguments, $once, $scope);
     }
 }
 
@@ -157,11 +172,12 @@ if (! function_exists('add_action_once')) {
     /**
      * ลงทะเบียน action listener แบบ one-shot (รันครั้งเดียวแล้วถอดอัตโนมัติ)
      *
-     * @param  array|string  $hook  ชื่อ hook
-     * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
+     * @param  array<string>|string  $hook  ชื่อ hook
+     * @param  array<mixed>|callable|Closure|string  $callback  callback ที่จะรัน
      * @param  int  $priority  ลำดับ (default: 10)
      * @param  int  $arguments  จำนวน argument ที่รับ
      * @param  string|null  $scope  scope
+     * @return string UUID ของ listener
      */
     function add_action_once(
         string|array $hook,
@@ -169,8 +185,8 @@ if (! function_exists('add_action_once')) {
         int $priority = 10,
         int $arguments = 1,
         ?string $scope = null,
-    ): void {
-        Action::addOnceListener($hook, $callback, $priority, $arguments, $scope);
+    ): string {
+        return Action::addOnceListener($hook, $callback, $priority, $arguments, $scope);
     }
 }
 
@@ -178,11 +194,12 @@ if (! function_exists('add_filter_once')) {
     /**
      * ลงทะเบียน filter listener แบบ one-shot (รันครั้งเดียวแล้วถอดอัตโนมัติ)
      *
-     * @param  array|string  $hook  ชื่อ hook
-     * @param  array|callable|Closure|string  $callback  callback ที่จะรัน
+     * @param  array<string>|string  $hook  ชื่อ hook
+     * @param  array<mixed>|callable|Closure|string  $callback  callback ที่จะรัน
      * @param  int  $priority  ลำดับ (default: 10)
      * @param  int  $arguments  จำนวน argument ที่รับ
      * @param  string|null  $scope  scope
+     * @return string UUID ของ listener
      */
     function add_filter_once(
         string|array $hook,
@@ -190,8 +207,8 @@ if (! function_exists('add_filter_once')) {
         int $priority = 10,
         int $arguments = 1,
         ?string $scope = null,
-    ): void {
-        Filter::addOnceListener($hook, $callback, $priority, $arguments, $scope);
+    ): string {
+        return Filter::addOnceListener($hook, $callback, $priority, $arguments, $scope);
     }
 }
 

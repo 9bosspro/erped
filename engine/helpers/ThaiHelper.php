@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Carbon\Carbon;
+
 /*
 |--------------------------------------------------------------------------
 | Thai Helper Functions
@@ -18,10 +20,10 @@ if (! function_exists('remaining_time_text')) {
      * @param  Carbon\Carbon|DateTimeInterface|string  $expiresAt  เวลาหมดอายุ
      * @return string ข้อความแสดงเวลาที่เหลือ
      */
-    function remaining_time_text(Carbon\Carbon|DateTimeInterface|string $expiresAt): string
+    function remaining_time_text(Carbon|DateTimeInterface|string $expiresAt): string
     {
-        $expiresAt = Carbon\Carbon::parse($expiresAt);
-        $now = Carbon\Carbon::now();
+        $expiresAt = Carbon::parse($expiresAt);
+        $now = Carbon::now();
 
         if ($now->greaterThanOrEqualTo($expiresAt)) {
             return 'หมดอายุแล้ว';

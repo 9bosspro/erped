@@ -14,48 +14,59 @@ use JsonException;
 trait DataNormalization
 {
     /**
-     * Normalize mixed data ให้เป็น string สำหรับ Hashing
+     * Normalize mixed data to string for Hashing/Encryption
      */
     protected function normalizeData(mixed $data): string
     {
-        if (is_string($data)) {
+        if (\is_string($data)) {
             return $data;
         }
 
-        if (is_numeric($data)) {
+        if (\is_scalar($data)) {
             return (string) $data;
         }
 
+        if ($data === null) {
+            return '';
+        }
+
+        // At this point, $data must be an array or object
+        /** @var array<mixed>|object $data */
         return $this->canonicalize($data);
     }
 
     /**
-     * Canonicalize data — sort keys recursively และ serialize เป็น JSON
+     * Canonicalize data — sort keys recursively and serialize as JSON
+     *
+     * @param  array<mixed>|object  $data
      */
     protected function canonicalize(mixed $data): string
     {
-        if (is_object($data)) {
+        if (\is_object($data)) {
             $data = (array) $data;
         }
 
-        if (is_array($data)) {
+        if (\is_array($data)) {
             $data = $this->sortKeysRecursive($data);
         }
 
-        return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        return \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
 
     /**
-     * Sort array keys recursively สำหรับ deterministic serialization
+     * Sort array keys recursively for deterministic serialization
+     *
+     * @param  array<mixed>  $data
+     * @return array<mixed>
      */
     protected function sortKeysRecursive(array $data): array
     {
-        ksort($data);
+        \ksort($data);
 
         foreach ($data as &$value) {
-            if (is_array($value)) {
+            if (\is_array($value)) {
                 $value = $this->sortKeysRecursive($value);
-            } elseif (is_object($value)) {
+            } elseif (\is_object($value)) {
                 $value = $this->sortKeysRecursive((array) $value);
             }
         }
@@ -73,15 +84,20 @@ trait DataNormalization
     protected function deserializeData(string $plaintext): mixed
     {
         try {
-            $decoded = json_decode($plaintext, true, 512, JSON_THROW_ON_ERROR);
+            $decoded = json_decode($plaintext, true, 100, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
+            \sodium_memzero($plaintext);
+
             return $plaintext;
         }
 
         if (\is_array($decoded)) {
+            \sodium_memzero($plaintext);
+
             return $decoded;
         }
 
+        // sodium_memzero($plaintext);
         return $plaintext;
     }
 }

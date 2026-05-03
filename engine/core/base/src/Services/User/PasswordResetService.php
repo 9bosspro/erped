@@ -33,8 +33,10 @@ class PasswordResetService
     public function __construct(
         private readonly JwtHelper $jwtService,
     ) {
-        $this->tokenTtl = (int) config('core.base.crypto.jwt.delay', 86400);
-        $this->jwtKey = (string) config('core.base.crypto.jwt.secret', '');
+        $ttlRaw = config('core.base.crypto.jwt.delay', 86400);
+        $this->tokenTtl = is_int($ttlRaw) ? $ttlRaw : (is_numeric($ttlRaw) ? (int) $ttlRaw : 86400);
+        $keyRaw = config('core.base.crypto.jwt.secret', '');
+        $this->jwtKey = is_string($keyRaw) ? $keyRaw : '';
     }
 
     // =========================================================================
@@ -63,7 +65,7 @@ class PasswordResetService
             return $this->fail(
                 'กรุณาตรวจสอบอีเมล หรือไปดำเนินการก่อนจะหมดเวลา หรือติดต่อผู้ดูแลระบบ',
                 422,
-                ['remaining_time' => remaining_time_text($existing->expires_at)],
+                ['remaining_time' => remaining_time_text($existing->expires_at ?? now())],
             );
         }
 

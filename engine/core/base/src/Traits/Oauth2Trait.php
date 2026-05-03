@@ -8,6 +8,7 @@ use Exception;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -25,7 +26,7 @@ trait Oauth2Trait
      */
     public function getLogin(Request $request): RedirectResponse
     {
-        $request->session()->put('state', $state = (new \Core\Base\Support\Helpers\Crypto\HashHelper)->randomString(40));
+        $request->session()->put('state', $state = Str::random(40));
 
         $query = http_build_query([
             'client_id' => config('auth.client_id'),
@@ -62,7 +63,12 @@ trait Oauth2Trait
             ],
         );
 
-        $request->session()->put($response->json());
+        $token = $response->json();
+        $request->session()->put('oauth_token', [
+            'access_token' => $token['access_token'] ?? '',
+            'refresh_token' => $token['refresh_token'] ?? null,
+            'expires_in' => $token['expires_in'] ?? null,
+        ]);
 
         return redirect(route('sso.connect'));
     }

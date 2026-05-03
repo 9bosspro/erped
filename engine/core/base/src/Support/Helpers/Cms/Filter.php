@@ -17,6 +17,7 @@ use Core\Base\Support\Contracts\FilterInterface;
  * - $args[0] คือค่าเริ่มต้นที่จะถูก filter
  * - แต่ละ callback รับค่าปัจจุบันที่ $args[0] + args ที่เหลือเป็น context
  * - ถ้าไม่มี listener → คืน $args[0] โดยตรง
+ * - รองรับ falsy values: "", 0, false, [] ไม่ทำให้ pipeline หยุด
  *
  * ตัวอย่างการใช้งาน:
  * ```php
@@ -42,8 +43,7 @@ final class Filter extends ActionHookEvent implements FilterInterface
      * - แต่ละ listener รับค่าปัจจุบันที่ $args[0] + args ที่เหลือเป็น context
      * - ค่าที่ return จาก listener จะกลายเป็น $args[0] สำหรับ listener ถัดไป
      * - ถ้าไม่มี listener → คืน $args[0] โดยไม่เปลี่ยนแปลง
-     * - จัดการ once=true listeners อัตโนมัติหลังรัน
-     * - รองรับ falsy values: "", 0, false, [] ไม่ทำให้ pipeline หยุด
+     * - จัดการ once=true listeners อัตโนมัติหลัง loop (bulk removal)
      *
      * @param  string  $hook  ชื่อ filter hook เช่น 'post.content', 'price.format'
      * @param  array<mixed>  $args  $args[0] = ค่าที่ต้องการ filter, ที่เหลือ = context
@@ -58,17 +58,24 @@ final class Filter extends ActionHookEvent implements FilterInterface
             return $value;
         }
 
+        $onceIds = [];
+
         foreach ($this->getListeners($hook, $scope) as $listener) {
+            /** @var array<string, mixed> $listener */
             // ส่งค่าล่าสุดเป็น $args[0] เสมอ — pipeline pattern
-            // ใช้ $args[0] = $value เพื่อรักษา falsy values (0, '', false, [])
             $args[0] = $value;
-            $parameters = array_slice($args, 0, $listener['arguments']);
+            $value = $this->invokeListener($listener, $args);
 
-            $value = call_user_func_array($listener['callback'], $parameters);
-
-            if ($listener['once']) {
-                $this->removeOnceListener($hook, $listener['id']);
+            if (! empty($listener['once'])) {
+                $id = $listener['id'] ?? '';
+                if (\is_string($id) && $id !== '') {
+                    $onceIds[] = $id;
+                }
             }
+        }
+
+        foreach ($onceIds as $id) {
+            $this->removeOnceListener($hook, $id);
         }
 
         return $value;

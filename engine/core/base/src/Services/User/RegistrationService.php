@@ -73,15 +73,17 @@ class RegistrationService implements RegistrationServiceInterface
             return $this->fail('รูปแบบโทเคนไม่ถูกต้อง', 401);
         }
 
-        $tokenCheck = $this->checkRegisterToken((string) $tokenDataId);
+        $tokenCheck = $this->checkRegisterToken(is_scalar($tokenDataId) ? (string) $tokenDataId : '');
         if (! $tokenCheck->success) {
             return $tokenCheck;
         }
 
         // แนบ email จาก RegisterToken และจำลอง payload ให้โค้ดเก่า
+        /** @var object{email: string} $registerToken */
+        $registerToken = $tokenCheck->data;
         $payload = (object) [
             'data' => $tokenDataId,
-            'email' => $tokenCheck->data->email,
+            'email' => $registerToken->email,
         ];
 
         return $this->success('ตรวจสอบโทเคนสำเร็จ', $payload, 200);
@@ -134,8 +136,10 @@ class RegistrationService implements RegistrationServiceInterface
      */
     public function requestRegisterToken(string $email): ServiceResult
     {
-        $delay = (int) config('core.base::crypto.jwt.delay', 86400);
-        $key = (string) config('core.base::crypto.jwt.secret', '');
+        $delayRaw = config('core.base::crypto.jwt.delay', 86400);
+        $delay = is_int($delayRaw) ? $delayRaw : (is_numeric($delayRaw) ? (int) $delayRaw : 86400);
+        $keyRaw = config('core.base::crypto.jwt.secret', '');
+        $key = is_string($keyRaw) ? $keyRaw : '';
 
         if (empty($key)) {
             return $this->fail('ไม่มี key ในระบบ กรุณาขอโทเคนใหม่', 422);
@@ -147,7 +151,7 @@ class RegistrationService implements RegistrationServiceInterface
             return $this->fail(
                 'กรุณาตรวจสอบอีเมล หรือไปลงทะเบียนก่อนจะหมดเวลา หรือติดต่อผู้ดูแลระบบ',
                 422,
-                ['remaining_time' => remaining_time_text($existing->expires_at)],
+                ['remaining_time' => remaining_time_text($existing->expires_at ?? now())],
             );
         }
 
@@ -198,7 +202,7 @@ class RegistrationService implements RegistrationServiceInterface
             // 4. Log หลัง commit สำเร็จ (ไม่ block response)
             DB::afterCommit(function () use ($user, $email, $registerTokenId): void {
                 Log::info('USER_REGISTRATION_SUCCESS', [
-                    'user_id' => $user?->id,
+                    'user_id' => $user->id,
                     'email' => $email,
                     'register_token_id' => $registerTokenId,
                     'ip' => request()->ip(),
@@ -231,11 +235,11 @@ class RegistrationService implements RegistrationServiceInterface
      * - people  = People model
      * - user    = User model ที่สร้างหรือค้นพบ
      *
-     * @return array{0: mixed, 1: mixed, 2: mixed}
+     * @return array{0: AnonymousPeople|null, 1: \App\Models\People, 2: \App\Models\User}
      */
     private function resolvePersonAndUser(string $citizenId, RegistrationDTO $data, string $email): array
     {
-        $nameTh = $data->name_th ?? '';
+        $nameTh = $data->name_th;
         $nameEn = $data->name_en ?? $nameTh; // fallback: ใช้ name_th ถ้าไม่มี name_en
         $password = Hash::make($data->password);
 

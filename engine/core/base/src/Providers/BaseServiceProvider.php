@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Core\Base\Providers;
 
-use Core\Base\Traits\LoadAndPublishDataTrait;
-
 /**
  * BaseServiceProvider — Entry point ของ Core\Base package
  *
@@ -20,9 +18,7 @@ use Core\Base\Traits\LoadAndPublishDataTrait;
  */
 class BaseServiceProvider extends ServiceProvider
 {
-    use LoadAndPublishDataTrait;
-
-    protected const PACKAGE_NAME = 'ppp-base';
+    protected const string PACKAGE_NAME = 'ppp-base';
 
     /**
      * Providers ที่โหลดเสมอ (API + Web)

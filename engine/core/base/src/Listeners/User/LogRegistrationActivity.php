@@ -6,6 +6,7 @@ namespace Core\Base\Listeners\User;
 
 use Core\Base\Events\User\UserRegistrationCompleted;
 use Core\Base\Events\User\UserRegistrationFailed;
+use Illuminate\Events\Dispatcher;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -47,7 +48,12 @@ class LogRegistrationActivity
     /**
      * Register the listeners for the subscriber.
      */
-    public function subscribe($events): array
+    /**
+     * ลงทะเบียน listeners สำหรับ subscriber
+     *
+     * @return array<class-string, string>
+     */
+    public function subscribe(Dispatcher $events): array
     {
         return [
             UserRegistrationCompleted::class => 'handleCompleted',

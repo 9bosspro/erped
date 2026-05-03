@@ -7,15 +7,16 @@ namespace Core\Base\Providers;
 use Core\Base\Console\Commands\MinioHealthCheckCommand;
 // ── Support ────────────────────────────────────────────────────────────
 use Core\Base\Http\Middleware\VerifyCrossHostSignature;
+use Core\Base\Services\Ai\AiCacheService;
+use Core\Base\Services\Ai\Contracts\AiCacheServiceInterface;
 use Core\Base\Services\Core\CommonService;
-use Core\Base\Services\Session\Contracts\DeviceFingerprintServiceInterface;
-use Core\Base\Services\Session\DeviceFingerprintService;
-use Core\Base\Support\Action;
 use Core\Base\Support\Contracts\ActionInterface;
+// ── AI Services ────────────────────────────────────────────────────────
 use Core\Base\Support\Contracts\FilterInterface;
-// ── Other Services ─────────────────────────────────────────────────────
-use Core\Base\Support\Filter;
 use Core\Base\Support\Helpers\App\AppContext;
+// ── Other Services ─────────────────────────────────────────────────────
+use Core\Base\Support\Helpers\Cms\Action;
+use Core\Base\Support\Helpers\Cms\Filter;
 use Core\Base\Support\Helpers\Module\Contracts\ModuleHelperInterface;
 use Core\Base\Support\Helpers\Module\ModuleHelper;
 use Core\Base\Traits\LoadAndPublishDataTrait;
@@ -39,7 +40,7 @@ class CoreServiceProvider extends CBaseServiceProvider
 {
     use LoadAndPublishDataTrait;
 
-    protected const PACKAGE_NAME = 'ppp-core';
+    protected const string PACKAGE_NAME = 'ppp-core';
 
     protected array $commands = [
         MinioHealthCheckCommand::class,
@@ -57,11 +58,11 @@ class CoreServiceProvider extends CBaseServiceProvider
 
     public function boot(): void
     {
-        $this->loadAndPublishConfigurations(['myapp', 'sodium', 'rsa', 'jwt', 'security', 'permissions', 'general', 'crypto']);
+        $this->loadAndPublishConfigurations(['myapp', 'sodium', 'rsa', 'jwt', 'security', 'permissions', 'general', 'crypto', 'network']);
         $this->loadConstants(['constants']);
         $this->loadHelpers(['Common', 'App', 'Support', 'Lab', 'ActionFilter']);
         $this->loadAndPublishTranslations();
-        $this->loadAndPublishTranslationsjson();
+        $this->loadAndPublishTranslationsJson();
         $this->loadCommandsAndSchedules($this->commands);
         $this->registerMacros();
         $this->registerMorphMap();
@@ -69,12 +70,45 @@ class CoreServiceProvider extends CBaseServiceProvider
         /** @var Router $router */
         $router = $this->app->make(Router::class);
         $router->aliasMiddleware('crosshost.verify', VerifyCrossHostSignature::class);
+
+        $this->registerAuditListeners();
+    }
+
+    /**
+     * ลงทะเบียน Listeners สำหรับระบบ Audit Trail อัตโนมัติ
+     */
+    protected function registerAuditListeners(): void
+    {
+        /** @var \Core\Base\Support\Helpers\Cms\Action $action */
+        $action = $this->app->make('core.action');
+
+        // ตรวจจับเหตุการณ์ความปลอดภัยพื้นฐาน
+        // ใช้ app()->make() แทน app('alias') เพื่อหลีกเลี่ยง Larastan container-resolver loop
+        $action->addListener('auth.login.failed', function (array $data): void {
+            /** @var object $audit */
+            $audit = app()->make('core.audit');
+            $audit->logSecurity('login_failed', $data);  // @phpstan-ignore method.notFound
+        }, 100);
+
+        $action->addListener('auth.unauthorized', function (array $data): void {
+            /** @var object $audit */
+            $audit = app()->make('core.audit');
+            $audit->logSecurity('unauthorized_access', $data);  // @phpstan-ignore method.notFound
+        }, 100);
+
+        // ตัวอย่างการทำ Audit สำหรับเหตุการณ์ทั่วไป (อัปเดตให้รองรับ DTO)
+        $action->addListener('data.sensitive.access', function (\Core\Base\Support\DTOs\SensitiveAccessDTO $dto): void {
+            /** @var object $audit */
+            $audit = app()->make('core.audit');
+            $audit->log('sensitive_data_accessed', $dto->actionName, $dto->toArray());  // @phpstan-ignore method.notFound
+        }, 100);
     }
 
     // ─── Morph Map ──────────────────────────────────────────────
 
     protected function registerMorphMap(): void
     {
+        /** @var array<string, class-string<\Illuminate\Database\Eloquent\Model>> $morphMap */
         $morphMap = (array) config('core.base::general.morph_map', []);
 
         if (empty($morphMap)) {
@@ -102,24 +136,26 @@ class CoreServiceProvider extends CBaseServiceProvider
 
     protected function registerApiSuccessResponseMacro(): void
     {
-        Response::macro('apiSuccessResponse', function (mixed $data, ?string $message = null, int $code = 200, array $headers = [], int $options = 0): JsonResponse {
-            $baseOptions = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
-            if (app()->environment('local')) {
-                $baseOptions |= JSON_PRETTY_PRINT;
-            }
+        // คำนวณ baseOptions ครั้งเดียวตอน register — ไม่ต้องเรียก app()->environment() ทุก response
+        $baseOptions = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+        if ($this->app->environment('local')) {
+            $baseOptions |= JSON_PRETTY_PRINT;
+        }
 
+        Response::macro('apiSuccessResponse', function (mixed $data, ?string $message = null, int $code = 200, array $headers = [], int $options = 0) use ($baseOptions): JsonResponse {
             return Response::json(return_success($message ?? 'Operation successful', $data, $code), $code, $headers, $options | $baseOptions);
         });
     }
 
     protected function registerApiErrorResponseMacro(): void
     {
-        Response::macro('apiErrorResponse', function (?string $message = null, int $code = 400, mixed $data = null, array $headers = [], int $options = 0): JsonResponse {
-            $baseOptions = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
-            if (app()->environment('local')) {
-                $baseOptions |= JSON_PRETTY_PRINT;
-            }
+        // คำนวณ baseOptions ครั้งเดียวตอน register — ไม่ต้องเรียก app()->environment() ทุก response
+        $baseOptions = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+        if ($this->app->environment('local')) {
+            $baseOptions |= JSON_PRETTY_PRINT;
+        }
 
+        Response::macro('apiErrorResponse', function (?string $message = null, int $code = 400, mixed $data = null, array $headers = [], int $options = 0) use ($baseOptions): JsonResponse {
             return Response::json(return_error($message ?? 'An error occurred', $data, $code), $code, $headers, $options | $baseOptions);
         });
     }
@@ -142,6 +178,10 @@ class CoreServiceProvider extends CBaseServiceProvider
 
         $this->app->singleton(Filter::class);
         $this->app->alias(Filter::class, 'core.filter');
+
+        // ── AI ────────────────────────────────────────────────────
+        $this->app->singleton(AiCacheService::class);
+        $this->app->alias(AiCacheService::class, 'core.ai.cache');
     }
 
     // ─── Interface Bindings ────────────────────────────────────
@@ -155,8 +195,8 @@ class CoreServiceProvider extends CBaseServiceProvider
         $this->app->alias(Action::class, ActionInterface::class);
         $this->app->alias(Filter::class, FilterInterface::class);
 
-        // Session / Device
-        $this->app->alias(DeviceFingerprintService::class, DeviceFingerprintServiceInterface::class);
+        // AI
+        $this->app->alias(AiCacheService::class, AiCacheServiceInterface::class);
     }
 
     // ─── Transient Bindings ────────────────────────────────────
@@ -164,7 +204,5 @@ class CoreServiceProvider extends CBaseServiceProvider
     private function registerTransientBindings(): void
     {
         $this->app->bind(AppContext::class);
-        $this->app->bind(DeviceFingerprintService::class);
-        $this->app->alias(DeviceFingerprintService::class, 'core.session.device_fingerprint');
     }
 }

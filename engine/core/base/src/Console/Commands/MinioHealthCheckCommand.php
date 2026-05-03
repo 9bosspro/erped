@@ -25,9 +25,10 @@ class MinioHealthCheckCommand extends Command
      */
     public function handle(): int
     {
-        $disk = $this->option('disk');
-        $full = $this->option('full');
-        $json = $this->option('json');
+        $diskOpt = $this->option('disk');
+        $disk = is_string($diskOpt) ? $diskOpt : 'minio';
+        $full = (bool) $this->option('full');
+        $json = (bool) $this->option('json');
 
         $healthCheck = new MinioHealthCheck($disk);
 
@@ -56,10 +57,11 @@ class MinioHealthCheckCommand extends Command
 
         if ($result['healthy']) {
             $this->info('✅ MinIO is healthy');
-            $this->line("   Latency: {$result['latency_ms']}ms");
+            $latency = $result['latency_ms'];
+            $this->line('   Latency: '.(is_float($latency) || is_int($latency) ? (string) $latency : '?').'ms');
         } else {
             $this->error('❌ MinIO is unhealthy');
-            $this->line("   Error: {$result['message']}");
+            $this->line('   Error: '.$result['message']);
         }
 
         return $result['healthy'] ? self::SUCCESS : self::FAILURE;
@@ -89,7 +91,7 @@ class MinioHealthCheckCommand extends Command
 
         if (! empty($config['warnings'])) {
             foreach ($config['warnings'] as $warning) {
-                $this->warn("   ⚠ {$warning}");
+                $this->warn('   ⚠ '.$warning);
             }
         }
 
@@ -101,10 +103,11 @@ class MinioHealthCheckCommand extends Command
         $this->line('<fg=yellow>🔌 Connection</>');
         $conn = $result['checks']['connection'];
         $this->displayCheck('Connected', $conn['passed']);
-        $this->line("   Latency: {$conn['latency_ms']}ms");
+        $connLatency = $conn['latency_ms'];
+        $this->line('   Latency: '.(is_float($connLatency) || is_int($connLatency) ? (string) $connLatency : '?').'ms');
 
         if (! $conn['passed']) {
-            $this->error("   Error: {$conn['message']}");
+            $this->error('   Error: '.$conn['message']);
         }
         $this->newLine();
 
@@ -114,7 +117,7 @@ class MinioHealthCheckCommand extends Command
         $this->displayCheck("Bucket '{$bucket['bucket']}'", $bucket['passed']);
 
         if (! $bucket['passed']) {
-            $this->warn("   {$bucket['message']}");
+            $this->warn('   '.$bucket['message']);
         }
         $this->newLine();
 
@@ -128,7 +131,8 @@ class MinioHealthCheckCommand extends Command
 
         // Summary
         $this->line('<fg=yellow>📊 Summary</>');
-        $this->line("   Total Latency: {$result['latency_ms']}ms");
+        $totalLatency = $result['latency_ms'];
+        $this->line('   Total Latency: '.(is_float($totalLatency) || is_int($totalLatency) ? (string) $totalLatency : '?').'ms');
 
         if ($result['healthy']) {
             $this->info('   ✅ Overall Status: HEALTHY');

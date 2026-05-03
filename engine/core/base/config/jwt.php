@@ -19,6 +19,7 @@ return [
     'secret' => env('JWT_SECRET'),
     'access_ttl' => (int) env('JWT_ACCESS_TTL', 3600),
     'refresh_ttl' => (int) env('JWT_REFRESH_TTL', 2592000),
+    'jwt_seed' => env('JWT_SEED'),
     // Issuer & Audience claims
     'issuer' => env('JWT_ISSUER', env('APP_URL', 'http://localhost')),
     'audience' => env('JWT_AUDIENCE', env('APP_URL', 'http://localhost')),

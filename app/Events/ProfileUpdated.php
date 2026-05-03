@@ -10,6 +10,9 @@ class ProfileUpdated
 {
     use Dispatchable, SerializesModels;
 
+    /**
+     * @param  list<string>  $changedFields
+     */
     public function __construct(
         public User $user,
         public array $changedFields,

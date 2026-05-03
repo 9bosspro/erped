@@ -98,4 +98,8 @@ interface HashHelperInterface
         string $salt = '',
         string $algorithm = 'sha3-256',
     ): string;
+
+    // ─── ID Generation ───────────────────────────────────────────
+
+    public function generateId(int $version = 7, bool $includeDash = true): string;
 }

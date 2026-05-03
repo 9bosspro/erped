@@ -110,6 +110,19 @@ class SodiumHybrid
         }
     }
 
+    /**
+     * ดึง Secret Key (X25519) ออกจาก Keypair
+     * ⚠️ อันตราย: ใช้เพื่อการ Export หรือสร้าง Box Keypair เท่านั้น
+     */
+    public function getSecretKeyBinary(): string
+    {
+        try {
+            return \sodium_crypto_kx_secretkey($this->keypair);
+        } catch (SodiumException $e) {
+            throw new RuntimeException('Cannot extract secret key: '.$e->getMessage(), 0, $e);
+        }
+    }
+
     // ──────────────────────────────────────────────────────────
     //  KEYPAIR PERSISTENCE
     // ──────────────────────────────────────────────────────────
@@ -142,19 +155,15 @@ class SodiumHybrid
         $pubKeyBinary = $this->resolvePublicKey($otherPublicKey);
 
         try {
-            if ($isClient) {
-                [$this->rx, $this->tx] = \sodium_crypto_kx_client_session_keys(
-                    $this->keypair,
-                    $pubKeyBinary,
-                );
-            } else {
-                [$this->rx, $this->tx] = \sodium_crypto_kx_server_session_keys(
-                    $this->keypair,
-                    $pubKeyBinary,
-                );
-            }
+            $keys = $isClient
+                ? \sodium_crypto_kx_client_session_keys($this->keypair, $pubKeyBinary)
+                : \sodium_crypto_kx_server_session_keys($this->keypair, $pubKeyBinary);
+
+            [$this->rx, $this->tx] = $keys;
         } catch (SodiumException $e) {
             throw new RuntimeException('Session setup failed: '.$e->getMessage(), 0, $e);
+        } finally {
+            \sodium_memzero($pubKeyBinary);
         }
 
         $this->sessionReady = true;
@@ -182,13 +191,16 @@ class SodiumHybrid
     {
         $this->assertSession('encrypt');
 
+        /** @var string $tx — guaranteed non-null by assertSession() */
+        $tx = $this->tx;
+
         try {
             $nonce = \random_bytes(self::NONCE_LEN);
             $ciphertext = \sodium_crypto_aead_xchacha20poly1305_ietf_encrypt(
                 $message,
                 $aad,
                 $nonce,
-                $this->tx,
+                $tx,
             );
         } catch (SodiumException $e) {
             throw new RuntimeException('Encryption failed: '.$e->getMessage(), 0, $e);
@@ -210,6 +222,9 @@ class SodiumHybrid
     {
         $this->assertSession('decrypt');
 
+        /** @var string $rx — guaranteed non-null by assertSession() */
+        $rx = $this->rx;
+
         $decoded = \base64_decode($payload, strict: true);
 
         if ($decoded === false || \strlen($decoded) <= self::NONCE_LEN) {
@@ -224,7 +239,7 @@ class SodiumHybrid
                 $ciphertext,
                 $aad,
                 $nonce,
-                $this->rx,
+                $rx,
             );
         } catch (SodiumException $e) {
             throw new RuntimeException('Decryption failed: '.$e->getMessage(), 0, $e);
@@ -242,13 +257,55 @@ class SodiumHybrid
     /** เข้ารหัสแล้ว encode เป็น hex (บาง transport ชอบ hex) */
     public function encryptHex(string $message, string $aad = ''): string
     {
-        return \sodium_bin2hex(\base64_decode($this->encrypt($message, $aad)));
+        $this->assertSession('encrypt');
+
+        /** @var string $tx — guaranteed non-null by assertSession() */
+        $tx = $this->tx;
+
+        try {
+            $nonce = \random_bytes(self::NONCE_LEN);
+            $ciphertext = \sodium_crypto_aead_xchacha20poly1305_ietf_encrypt($message, $aad, $nonce, $tx);
+        } catch (SodiumException $e) {
+            throw new RuntimeException('Encryption failed: '.$e->getMessage(), 0, $e);
+        }
+
+        return \sodium_bin2hex($nonce.$ciphertext);
     }
 
     /** ถอดรหัสจาก hex payload */
     public function decryptHex(string $hexPayload, string $aad = ''): string
     {
-        return $this->decrypt(\base64_encode(\sodium_hex2bin($hexPayload)), $aad);
+        $this->assertSession('decrypt');
+
+        /** @var string $rx — guaranteed non-null by assertSession() */
+        $rx = $this->rx;
+
+        if ($hexPayload === '' || ! \ctype_xdigit($hexPayload)) {
+            throw new RuntimeException('Invalid hex payload: expected a non-empty hex string.');
+        }
+
+        $bin = \sodium_hex2bin($hexPayload);
+
+        if (\strlen($bin) <= self::NONCE_LEN) {
+            throw new RuntimeException('Invalid payload: too short to contain nonce + ciphertext.');
+        }
+
+        $nonce = \substr($bin, 0, self::NONCE_LEN);
+        $ciphertext = \substr($bin, self::NONCE_LEN);
+
+        try {
+            $plaintext = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt($ciphertext, $aad, $nonce, $rx);
+        } catch (SodiumException $e) {
+            throw new RuntimeException('Decryption failed: '.$e->getMessage(), 0, $e);
+        }
+
+        if ($plaintext === false) {
+            throw new RuntimeException(
+                'Decryption failed: authentication tag mismatch — data may be tampered.',
+            );
+        }
+
+        return $plaintext;
     }
 
     // ──────────────────────────────────────────────────────────
@@ -268,6 +325,17 @@ class SodiumHybrid
         }
 
         $this->sessionReady = false;
+    }
+
+    /**
+     * รีเซ็ต session keys แล้ว setup ใหม่กับ peer อื่น — keypair คงเดิม
+     * ใช้เมื่อต้องการเปลี่ยน session โดยไม่สร้าง keypair ใหม่
+     */
+    public function resetSession(): static
+    {
+        $this->wipe();
+
+        return $this;
     }
 
     public function __destruct()
@@ -294,23 +362,20 @@ class SodiumHybrid
     }
 
     /**
-     * แปลง public key string (hex หรือ base64) → binary พร้อมตรวจขนาด
+     * แปลง public key string (binary, hex หรือ base64) → binary พร้อมตรวจขนาด
+     *
+     * @param  string  $key  Public Key ในรูปแบบ binary(32), hex(64) หรือ base64(44)
+     * @return string binary(32)
+     *
+     * @throws RuntimeException ถ้า Format หรือขนาดไม่ถูกต้อง
      */
     protected function resolvePublicKey(string $key): string
     {
-        $decoded = \ctype_xdigit($key)
-            ? \sodium_hex2bin($key)
-            : \base64_decode($key, strict: true);
+        $decoded = \Core\Base\Support\Helpers\Crypto\Concerns\ParsesEncryptionKey::decodeKey($key);
 
-        if ($decoded === false || $decoded === '') {
+        if ($decoded === null || \strlen($decoded) !== self::PUBKEY_LEN) {
             throw new RuntimeException(
-                'Invalid public key format. Expected hex or base64.',
-            );
-        }
-
-        if (\strlen($decoded) !== self::PUBKEY_LEN) {
-            throw new RuntimeException(
-                'Invalid public key length. Expected '.self::PUBKEY_LEN.' bytes, got '.\strlen($decoded).'.',
+                'Invalid public key format or length. Expected binary(32), hex(64), or base64(44).',
             );
         }
 

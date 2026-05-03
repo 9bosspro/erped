@@ -8,21 +8,18 @@ use Core\Base\Contracts\Http\RateLimiting\RateLimiterConfiguratorInterface;
 use Core\Base\Contracts\Http\RateLimiting\RequestFingerprinterInterface;
 use Core\Base\Http\RateLimiting\RateLimitConfigurator;
 use Core\Base\Http\RateLimiting\RequestFingerprinter;
-use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * RateLimitingServiceProvider — ลงทะเบียน Rate Limiting services เข้า DI container
+ * RateLimitingServiceProvider — ลงทะเบียนและตั้งค่า Rate Limiting services
  *
  * รวมศูนย์การจัดการ Rate Limiting ไว้ที่เดียวใน Core\Base เพื่อให้:
  *   - ย้ายหรือ swap implementation ได้โดยแก้ที่ provider นี้ที่เดียว
  *   - mock ใน test ได้ง่ายผ่าน interface binding
  *   - ลด coupling ระหว่าง Master package กับ rate limiting internals
- *
- * การ call configure() ยังคงอยู่ใน MasterServiceProvider::boot()
- * เพื่อให้แน่ใจว่า oauth2 config ถูก load ก่อน
+ *   - Core จัดการ boot ตัวเองได้โดยไม่ต้องพึ่ง Master
  */
-class RateLimitingServiceProvider extends ServiceProvider implements DeferrableProvider
+class RateLimitingServiceProvider extends ServiceProvider
 {
     /**
      * ลงทะเบียน Rate Limiting services เข้า container
@@ -34,16 +31,11 @@ class RateLimitingServiceProvider extends ServiceProvider implements DeferrableP
     }
 
     /**
-     * คืนรายชื่อ services ที่ provider นี้ provide
-     * Laravel จะ defer การโหลด provider จนกว่าจะมีการร้องขอ service เหล่านี้
-     *
-     * @return array<int, string>
+     * Boot — เรียก configure() เพื่อตั้งค่า Rate Limiter ทั้งหมด
+     * ทำงานอัตโนมัติใน Core โดยไม่ต้องพึ่ง Master
      */
-    public function provides(): array
+    public function boot(RateLimiterConfiguratorInterface $configurator): void
     {
-        return [
-            RequestFingerprinterInterface::class,
-            RateLimiterConfiguratorInterface::class,
-        ];
+        $configurator->configure();
     }
 }

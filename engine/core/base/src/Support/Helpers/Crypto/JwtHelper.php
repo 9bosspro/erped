@@ -57,11 +57,20 @@ final class JwtHelper implements JwtHelperInterface
 
     public function __construct()
     {
-        $this->algorithm = (string) config('core.base::jwt.algorithm', 'EdDSA');
-        $this->issuer = (string) config('core.base::jwt.issuer', config('app.url', 'http://localhost'));
-        $this->audience = (string) config('core.base::jwt.audience', config('app.url', 'http://localhost'));
-        $this->accessTtl = (int) config('core.base::jwt.access_ttl', 3600);
-        $this->refreshTtl = (int) config('core.base::jwt.refresh_ttl', 2592000);
+        $algorithm = config('core.base::jwt.algorithm', 'EdDSA');
+        $this->algorithm = is_scalar($algorithm) ? (string) $algorithm : 'EdDSA';
+
+        $issuer = config('core.base::jwt.issuer') ?: config('app.url', 'http://localhost');
+        $this->issuer = is_scalar($issuer) ? (string) $issuer : 'http://localhost';
+
+        $audience = config('core.base::jwt.audience') ?: config('app.url', 'http://localhost');
+        $this->audience = is_scalar($audience) ? (string) $audience : 'http://localhost';
+
+        $accessTtl = config('core.base::jwt.access_ttl', 3600);
+        $this->accessTtl = is_scalar($accessTtl) ? (int) $accessTtl : 3600;
+
+        $refreshTtl = config('core.base::jwt.refresh_ttl', 2592000);
+        $this->refreshTtl = is_scalar($refreshTtl) ? (int) $refreshTtl : 2592000;
 
         $this->config = $this->switchJwt($this->algorithm);
     }
@@ -71,13 +80,21 @@ final class JwtHelper implements JwtHelperInterface
      *
      * @return array{public: string, secret: string} Base64
      */
-    public static function generateSignatureKeyPairforjwt(bool $useBase64 = false): array
+    public function generateSignatureKeyPairforjwt(?string $signSeed, bool $useBinary = false): array
     {
-        $kp = \sodium_crypto_sign_keypair();
+
+        $signSeed = $this->resolveKey($signSeed, 32);
+        if (strlen($signSeed) !== SODIUM_CRYPTO_SIGN_SEEDBYTES) {
+            throw new RuntimeException(
+                'Seed length ไม่ถูกต้อง',
+            );
+        }
+        //  $kp = \sodium_crypto_sign_keypair();
+        $kp = \sodium_crypto_sign_seed_keypair($signSeed);
         $result = [
-            'public' => $useBase64 ? self::encodeb64(\sodium_crypto_sign_publickey($kp)) : \sodium_crypto_sign_publickey($kp),
-            'secret' => $useBase64 ? self::encodeb64(\sodium_crypto_sign_secretkey($kp)) : \sodium_crypto_sign_secretkey($kp),
-            'keypair' => $useBase64 ? self::encodeb64($kp) : $kp,
+            'public' => self::encodeKey(\sodium_crypto_sign_publickey($kp), $useBinary),
+            'secret' => self::encodeKey(\sodium_crypto_sign_secretkey($kp), $useBinary),
+            'keypair' => self::encodeKey($kp, $useBinary),
         ];
         \sodium_memzero($kp);
 
@@ -381,7 +398,7 @@ final class JwtHelper implements JwtHelperInterface
         $claims = $parsed->claims()->all();
 
         return array_map(
-            static fn (mixed $v) => $v instanceof DateTimeImmutable ? $v->getTimestamp() : $v,
+            static fn(mixed $v) => $v instanceof DateTimeImmutable ? $v->getTimestamp() : $v,
             $claims,
         );
     }
@@ -397,7 +414,13 @@ final class JwtHelper implements JwtHelperInterface
     /**
      * ดึง claim จาก token **โดยไม่ตรวจ signature/expiry**
      *
-     * ⚠️ ข้อมูลที่ได้อาจถูก tampered — ใช้เฉพาะกรณีที่ต้องการอ่านก่อน validate เท่านั้น
+     * ⚠️ **SECURITY WARNING** — ข้อมูลที่ได้อาจถูก forge โดย attacker
+     * ห้ามใช้ตัดสิน authentication, authorization หรือ business logic ใดๆ
+     * เหมาะเฉพาะ: routing hint, blacklist lookup เบื้องต้น, UI display ก่อน validate
+     *
+     * สำหรับ auth decision ใช้ getClaim() (ผ่าน parseSafe) เสมอ
+     *
+     * @internal ใช้เฉพาะใน helper methods ภายใน class นี้ (getUserId, getTokenType, getJti ฯลฯ)
      */
     public function getClaimUnvalidated(string $token, string $claimName): mixed
     {
@@ -424,7 +447,9 @@ final class JwtHelper implements JwtHelperInterface
      */
     public function getTokenType(string $token): ?string
     {
-        return $this->getClaimUnvalidated($token, 'type');
+        $type = $this->getClaimUnvalidated($token, 'type');
+
+        return is_string($type) ? $type : null;
     }
 
     /**
@@ -434,7 +459,9 @@ final class JwtHelper implements JwtHelperInterface
      */
     public function getJti(string $token): ?string
     {
-        return $this->getClaimUnvalidated($token, 'jti');
+        $jti = $this->getClaimUnvalidated($token, 'jti');
+
+        return is_string($jti) ? $jti : null;
     }
 
     /**
@@ -446,7 +473,7 @@ final class JwtHelper implements JwtHelperInterface
     {
         $scopes = $this->getClaimUnvalidated($token, 'scopes');
 
-        return \is_array($scopes) ? $scopes : [];
+        return \is_array($scopes) ? array_map('strval', $scopes) : [];
     }
 
     /**
@@ -456,7 +483,9 @@ final class JwtHelper implements JwtHelperInterface
      */
     public function getSubject(string $token): ?string
     {
-        return $this->getClaimUnvalidated($token, 'sub');
+        $sub = $this->getClaimUnvalidated($token, 'sub');
+
+        return is_string($sub) ? $sub : null;
     }
 
     public function getRegisteredClaims(string $token): array
@@ -467,7 +496,7 @@ final class JwtHelper implements JwtHelperInterface
         }
 
         $claims = $parsed->claims();
-        $toTs = static fn (mixed $v) => $v instanceof DateTimeImmutable ? $v->getTimestamp() : null;
+        $toTs = static fn(mixed $v) => $v instanceof DateTimeImmutable ? $v->getTimestamp() : null;
 
         return [
             'iss' => $claims->get('iss'),
@@ -491,7 +520,8 @@ final class JwtHelper implements JwtHelperInterface
             return false;
         }
 
-        $tokenScopes = $parsed->claims()->get('scopes') ?? [];
+        $tokenScopesRaw = $parsed->claims()->get('scopes') ?? [];
+        $tokenScopes = is_array($tokenScopesRaw) ? $tokenScopesRaw : [];
         $required = \is_string($requiredScopes) ? [$requiredScopes] : $requiredScopes;
 
         return array_diff($required, $tokenScopes) === [];
@@ -504,7 +534,8 @@ final class JwtHelper implements JwtHelperInterface
             return false;
         }
 
-        $tokenScopes = $parsed->claims()->get('scopes') ?? [];
+        $tokenScopesRaw = $parsed->claims()->get('scopes') ?? [];
+        $tokenScopes = is_array($tokenScopesRaw) ? $tokenScopesRaw : [];
 
         return \count(\array_intersect($anyScopes, $tokenScopes)) > 0;
     }
@@ -575,7 +606,8 @@ final class JwtHelper implements JwtHelperInterface
 
     public function fingerprint(string $token): string
     {
-        $secret = (string) config('app.key', '');
+        $secretRaw = config('app.key', '');
+        $secret = is_scalar($secretRaw) ? (string) $secretRaw : '';
         if (\str_starts_with($secret, 'base64:')) {
             $secret = (string) \base64_decode(\substr($secret, 7));
         }
@@ -649,8 +681,12 @@ final class JwtHelper implements JwtHelperInterface
 
     private function configjwt(Configuration $config): Configuration
     {
-        $timezone = new DateTimeZone((string) config('app.timezone', 'Asia/Bangkok'));
-        $leeway = (int) config('core.base::jwt.leeway', 60);
+        $timezoneVal = config('app.timezone', 'Asia/Bangkok');
+        $timezone = new DateTimeZone(is_scalar($timezoneVal) ? (string) $timezoneVal : 'Asia/Bangkok');
+
+        $leewayVal = config('core.base::jwt.leeway', 60);
+        $leeway = is_scalar($leewayVal) ? (int) $leewayVal : 60;
+
         $this->config = $config->withValidationConstraints(
             new Constraint\IssuedBy($this->issuer),
             new Constraint\PermittedFor($this->audience),
@@ -697,7 +733,8 @@ final class JwtHelper implements JwtHelperInterface
             default => new HS256,
         };
 
-        $key = $secretKey ?? (string) config('app.key', '');
+        $keyVal = $secretKey ?? config('app.key', '');
+        $key = is_scalar($keyVal) ? (string) $keyVal : '';
 
         if (\str_starts_with($key, 'base64:')) {
             $decoded = \base64_decode(\substr($key, 7), true);
@@ -710,7 +747,7 @@ final class JwtHelper implements JwtHelperInterface
         // HMAC-SHA256 ต้องการ key อย่างน้อย 32 bytes เพื่อความปลอดภัย
         if (\strlen($key) < 32) {
             throw new RuntimeException(
-                'HMAC key ต้องมีความยาวอย่างน้อย 32 bytes — ปัจจุบัน '.\strlen($key).' bytes',
+                'HMAC key ต้องมีความยาวอย่างน้อย 32 bytes — ปัจจุบัน ' . \strlen($key) . ' bytes',
             );
         }
 
@@ -725,9 +762,14 @@ final class JwtHelper implements JwtHelperInterface
             default => new RS256,
         };
 
-        $privateKey = $priv ?? (string) config('core.base::crypto.rsa.private_key', '');
-        $publicKey = $pub ?? (string) config('core.base::crypto.rsa.public_key', '');
-        $passphrase = (string) config('core.base::crypto.rsa.passphrase', '');
+        $privateKeyVal = $priv ?? config('core.base::crypto.rsa.private_key', '');
+        $privateKey = is_scalar($privateKeyVal) ? (string) $privateKeyVal : '';
+
+        $publicKeyVal = $pub ?? config('core.base::crypto.rsa.public_key', '');
+        $publicKey = is_scalar($publicKeyVal) ? (string) $publicKeyVal : '';
+
+        $passphraseVal = config('core.base::crypto.rsa.passphrase', '');
+        $passphrase = is_scalar($passphraseVal) ? (string) $passphraseVal : '';
 
         $signingKey = is_file($privateKey) ? InMemory::file($privateKey, $passphrase) : InMemory::plainText($privateKey, $passphrase);
         $verificationKey = is_file($publicKey) ? InMemory::file($publicKey) : InMemory::plainText($publicKey);
@@ -737,12 +779,47 @@ final class JwtHelper implements JwtHelperInterface
 
     private function configureEddsa(?string $priv = null, ?string $pub = null): Configuration
     {
-        $privateKey = $priv ?? (string) config('core.base::jwt.privatekey', '');
-        $publicKey = $pub ?? (string) config('core.base::jwt.publickey', '');
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        //    $masterKeyBase64 = config('core.base::security.masterkey');
+        $jwtSeed = config('core.base::jwt.jwt_seed');
+        if ($jwtSeed === null) {
+            throw new RuntimeException('Master Key is not configured or invalid. Please check MASTERKEY in your .env file.');
+        }
+        // dd($jwtSeed);
+        /*  $masterKey32 = parseKey($masterKeyBase64);
+        if ($masterKey32 === null) {
+            throw new RuntimeException('Master Key is not configured or invalid. Please check MASTERKEY in your .env file.');
+        }
+
+        $masterSeed = genHashByName('master_key_seed', $masterKey32, 32); // คีสำรอง
+        if ($masterSeed === null) {
+            throw new RuntimeException('Failed to generate master seed from Master Key.');
+        }
+
+        $jwtSeed = genHashByName('signature_key_derivation_jwt', $masterSeed, 32);
+        if ($jwtSeed === null) {
+            throw new RuntimeException('Failed to generate JWT signature seed.');
+        } */
+
+        $generateSignatureKeyPairjwt = $this->generateSignatureKeyPairforjwt($jwtSeed, true);
+
+        $privateKeyVal = (string) $generateSignatureKeyPairjwt['secret'];
+        $publicKeyVal = (string) $generateSignatureKeyPairjwt['public'];
+        //
+        //  $privateKeyVal = $priv ?? config('core.base::jwt.privatekey', '');
+        $privateKey = $privateKeyVal;
+
+        //   $publicKeyVal = $pub ?? config('core.base::jwt.publickey', '');
+        $publicKey = $publicKeyVal;
 
         // Decode Base64 / Base64URL เฉพาะเมื่อไม่ใช่ PEM format
         // PEM keys ขึ้นต้นด้วย "-----BEGIN..." — ห้ามนำไป decode ซ้ำ
-        if ($privateKey !== '' && ! \str_starts_with($privateKey, '-----')) {
+        /*   if ($privateKey !== '' && ! \str_starts_with($privateKey, '-----')) {
             $decoded = \base64_decode(\rtrim(\strtr($privateKey, '-_', '+/'), '='), true);
             if ($decoded === false) {
                 throw new RuntimeException('EdDSA private key: base64 decode ล้มเหลว — ตรวจสอบ config key');
@@ -756,7 +833,7 @@ final class JwtHelper implements JwtHelperInterface
                 throw new RuntimeException('EdDSA public key: base64 decode ล้มเหลว — ตรวจสอบ config key');
             }
             $publicKey = $decoded;
-        }
+        } */
 
         if ($privateKey === '') {
             throw new RuntimeException('EdDSA private key ไม่ได้ตั้งค่า — ตรวจสอบ config core.base::jwt.privatekey');
@@ -766,10 +843,12 @@ final class JwtHelper implements JwtHelperInterface
             throw new RuntimeException('EdDSA public key ไม่ได้ตั้งค่า — ตรวจสอบ config core.base::jwt.publickey');
         }
 
-        return Configuration::forAsymmetricSigner(
+        $cached = Configuration::forAsymmetricSigner(
             new Eddsa,
             InMemory::plainText($privateKey),
             InMemory::plainText($publicKey),
         );
+
+        return $cached;
     }
 }

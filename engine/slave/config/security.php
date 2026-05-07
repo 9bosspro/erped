@@ -34,6 +34,7 @@ return [
         */
         'style_src' => array_filter([
             'https://fonts.googleapis.com',
+            'https://fonts.bunny.net',
             'https://cdnjs.cloudflare.com',
             (string) env('CSP_STYLE_SRC_EXTRA', ''),
         ]),
@@ -45,6 +46,7 @@ return [
         */
         'font_src' => array_filter([
             'https://fonts.gstatic.com',
+            'https://fonts.bunny.net',
             'https://cdnjs.cloudflare.com',
             (string) env('CSP_FONT_SRC_EXTRA', ''),
         ]),
@@ -59,6 +61,9 @@ return [
             'https://www.google-analytics.com',
             'https://www.googletagmanager.com',
             'https://lh3.googleusercontent.com',
+            'https://picsum.photos',
+            'https://img.youtube.com',
+            'https://i.ytimg.com',
             (string) env('CSP_IMG_SRC_EXTRA', ''),
         ]),
 
@@ -72,6 +77,28 @@ return [
             'https://www.google-analytics.com',
             'https://www.googletagmanager.com',
             (string) env('CSP_CONNECT_SRC_EXTRA', ''),
+        ]),
+
+        /*
+        |----------------------------------------------------------------------
+        | Frame Sources — iframe embeds
+        |----------------------------------------------------------------------
+        | ว่างเปล่า = 'none' (บล็อกทุก iframe)
+        | เพิ่ม youtube-nocookie.com เพื่อรองรับ YouTube embed
+        */
+        'frame_src' => array_filter([
+            'https://www.youtube-nocookie.com',
+            (string) env('CSP_FRAME_SRC_EXTRA', ''),
+        ]),
+
+        /*
+        |----------------------------------------------------------------------
+        | Media Sources — audio / video elements
+        |----------------------------------------------------------------------
+        | ว่างเปล่า = fallback เป็น https: (อนุญาตทุก HTTPS)
+        */
+        'media_src' => array_filter([
+            (string) env('CSP_MEDIA_SRC_EXTRA', ''),
         ]),
 
     ],

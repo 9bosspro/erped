@@ -19,7 +19,8 @@ return new class extends Migration
 
         Schema::create('cache_locks', function (Blueprint $table) {
             $table->string('key')->primary();
-            $table->string('owner');
+            //  $table->string('owner');
+            $table->uuid('owner')->nullable()->index(); // เพิ่มฟิลด์ owner
             $table->integer('expiration');
         });
     }

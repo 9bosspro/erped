@@ -26,10 +26,13 @@ class SecurityHeaders
     /**
      * Permissions-Policy header value — static ทุก request
      */
-    private const string PERMISSIONS_POLICY = 'accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), cross-origin-isolated=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(self), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()';
+    private const string PERMISSIONS_POLICY = 'accelerometer=(), autoplay=(), camera=(), cross-origin-isolated=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()';
 
     /**
      * CSP template สำหรับ Web routes — สร้างครั้งเดียว แทนที่ __NONCE__ ต่อ request
+     *
+     * ใน dev (มีไฟล์ public/hot จาก Vite) จะ rebuild ทุก request เพื่อให้ Vite host
+     * ที่อาจเปลี่ยนพอร์ตได้ ถูกใส่ลง CSP ตามจริง
      */
     private static ?string $webCspTemplate = null;
 
@@ -47,11 +50,13 @@ class SecurityHeaders
 
         if ($nonce !== null) {
             app()->instance('csp-nonce', $nonce);
+            \Illuminate\Support\Facades\Vite::useCspNonce($nonce);
         }
 
         $response = $next($request);
 
         $this->applyCommonHeaders($response, $isApi);
+        $this->applyTransportHeaders($response, $request);
 
         if ($isApi) {
             $this->applyApiHeaders($response);
@@ -72,9 +77,33 @@ class SecurityHeaders
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('X-XSS-Protection', '0');
         $response->headers->set('X-Download-Options', 'noopen');
+        $response->headers->set('X-Permitted-Cross-Domain-Policies', 'none');
         $response->headers->set('Cross-Origin-Opener-Policy', $isApi ? 'same-origin' : 'same-origin-allow-popups');
         $response->headers->set('Cross-Origin-Resource-Policy', $isApi ? 'same-origin' : 'cross-origin');
         $response->headers->set('Permissions-Policy', self::PERMISSIONS_POLICY);
+    }
+
+    /**
+     * Transport-level headers — HSTS เปิดเฉพาะ HTTPS + production
+     *
+     * เปิด HSTS บน HTTP จะถูก browser ละเลย และเสี่ยงทำผู้ใช้ติด cache
+     * ผิดในช่วง dev — ดังนั้น guard 2 ชั้น (env=production + scheme=https)
+     */
+    private function applyTransportHeaders(Response $response, Request $request): void
+    {
+        if (! app()->environment('production')) {
+            return;
+        }
+
+        if (! $request->isSecure()) {
+            return;
+        }
+
+        // 1 ปี + includeSubDomains + preload-ready
+        $response->headers->set(
+            'Strict-Transport-Security',
+            'max-age=31536000; includeSubDomains; preload',
+        );
     }
 
     /**
@@ -94,14 +123,48 @@ class SecurityHeaders
      */
     private function applyWebHeaders(Response $response, ?string $nonce): void
     {
-        if (self::$webCspTemplate === null) {
-            self::$webCspTemplate = $this->buildWebCspTemplate();
-        }
+        // dev mode → ห้าม cache template เพราะ Vite host เปลี่ยนได้
+        $template = $this->isViteHot()
+            ? $this->buildWebCspTemplate()
+            : (self::$webCspTemplate ??= $this->buildWebCspTemplate());
 
-        $csp = str_replace('__NONCE__', $nonce ?? '', self::$webCspTemplate);
+        $csp = str_replace('__NONCE__', $nonce ?? '', $template);
 
         $response->headers->set('Content-Security-Policy', $csp);
         $response->headers->set('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    }
+
+    /**
+     * ตรวจว่า Vite dev server กำลังรันอยู่ (มีไฟล์ public/hot)
+     */
+    private function isViteHot(): bool
+    {
+        return app()->environment('local') && is_file(public_path('hot'));
+    }
+
+    /**
+     * อ่าน Vite dev host จากไฟล์ public/hot และคืน sources สำหรับ CSP
+     *
+     * รูปแบบไฟล์: บรรทัดแรกคือ URL เช่น http://[::1]:5173 หรือ http://localhost:5173
+     *
+     * @return array{http: string, ws: string}|null
+     */
+    private function viteHotSources(): ?array
+    {
+        $hotFile = public_path('hot');
+        if (! is_file($hotFile)) {
+            return null;
+        }
+
+        $url = trim((string) @file_get_contents($hotFile));
+        if ($url === '') {
+            return null;
+        }
+
+        // แปลง http(s):// → ws(s)://  สำหรับ HMR WebSocket
+        $wsUrl = preg_replace('#^http#i', 'ws', $url) ?? $url;
+
+        return ['http' => $url, 'ws' => $wsUrl];
     }
 
     /**
@@ -116,9 +179,9 @@ class SecurityHeaders
         $minioUrl = rtrim($this->configString('filesystems.disks.minio.endpoint'), "' ");
         $imgProxy = rtrim($this->configString('slave::security.imgproxy_url', 'https://imgprox.ppp-online.com'), '/');
 
-        $reverbHost   = $this->configString('reverb.servers.reverb.host');
-        $reverbPort   = $this->configString('reverb.servers.reverb.port', '8080');
-        $reverbScheme = $this->configString('broadcasting.connections.reverb.options.scheme', 'http') === 'https' ? 'wss' : 'ws';
+        $reverbHost   = $this->configString('broadcasting.connections.reverb.options.host');
+        $reverbPort   = $this->configString('broadcasting.connections.reverb.options.port', '443');
+        $reverbScheme = $this->configString('broadcasting.connections.reverb.options.scheme', 'https') === 'https' ? 'wss' : 'ws';
 
         $wsUrl = ($reverbHost && $reverbHost !== '0.0.0.0')
             ? "{$reverbScheme}://{$reverbHost}:{$reverbPort}"
@@ -134,10 +197,37 @@ class SecurityHeaders
         $cfgImg = (array) config('slave::security.csp.img_src', []);
         /** @var list<string> $cfgConnect */
         $cfgConnect = (array) config('slave::security.csp.connect_src', []);
+        /** @var list<string> $cfgFrame */
+        $cfgFrame = (array) config('slave::security.csp.frame_src', []);
+        /** @var list<string> $cfgMedia */
+        $cfgMedia = (array) config('slave::security.csp.media_src', []);
 
-        $scriptSrc = implode(' ', array_filter(["'self'", "'nonce-__NONCE__'", ...$cfgScript]));
-        $styleSrc  = implode(' ', array_filter(["'self'", "'unsafe-inline'", ...$cfgStyle]));
-        $fontSrc   = implode(' ', array_filter(["'self'", 'data:', ...$cfgFont]));
+        // Vite dev sources — เฉพาะตอน npm run dev (มีไฟล์ public/hot)
+        $viteHot     = $this->viteHotSources();
+        $viteHttp    = $viteHot['http'] ?? null;
+        $viteWs      = $viteHot['ws'] ?? null;
+
+        $scriptSrc = implode(' ', array_filter([
+            "'self'", "'nonce-__NONCE__'",
+            $viteHttp,
+            ...$cfgScript,
+        ]));
+
+        // style-src / style-src-elem — ไม่ใช้ nonce สำหรับ styles
+        // nonce ทำให้ 'unsafe-inline' ถูก ignore โดย CSP3 browsers ทุก directive ที่ nonce อยู่
+        // script-src คือสิ่งที่ต้องการ nonce เพื่อกันการ inject — styles มีความเสี่ยงต่ำกว่ามาก
+        $styleSrcElem = implode(' ', array_filter([
+            "'self'", "'unsafe-inline'",
+            $viteHttp,
+            ...$cfgStyle,
+        ]));
+
+        $styleSrc = $styleSrcElem;
+
+        // style-src-attr — React/Radix style={} และ element.style.setProperty()
+        $styleSrcAttr = "'unsafe-inline'";
+
+        $fontSrc = implode(' ', array_filter(["'self'", 'data:', ...$cfgFont]));
 
         $imgSrc = implode(' ', array_filter([
             "'self'", 'data:', 'blob:',
@@ -151,19 +241,35 @@ class SecurityHeaders
             $appUrl ?: null,
             $minioUrl ?: null,
             $wsUrl,
+            $viteHttp,
+            $viteWs,
             ...$cfgConnect,
         ]));
+
+        // frame-src — 'none' ถ้าไม่มี config, มิเช่นนั้นใช้ sources จาก config
+        $frameSrc = $cfgFrame !== []
+            ? implode(' ', array_filter(["'self'", ...$cfgFrame]))
+            : "'none'";
+
+        // media-src — fallback เป็น https: เมื่อไม่มี minio และไม่มี extra config
+        $mediaSrcParts = array_filter(["'self'", $minioUrl ?: null, ...$cfgMedia]);
+        $mediaSrc = count($mediaSrcParts) > 1
+            ? implode(' ', $mediaSrcParts)
+            : implode(' ', $mediaSrcParts) . ' https:';
 
         return implode('; ', [
             "default-src 'self'",
             "script-src {$scriptSrc}",
+            "script-src-attr 'none'",
             "style-src {$styleSrc}",
+            "style-src-elem {$styleSrcElem}",
+            "style-src-attr {$styleSrcAttr}",
             "font-src {$fontSrc}",
             "img-src {$imgSrc}",
             "connect-src {$connectSrc}",
-            "media-src 'self' " . ($minioUrl ?: 'https:'),
+            "media-src {$mediaSrc}",
             "worker-src 'self' blob:",
-            "frame-src 'none'",
+            "frame-src {$frameSrc}",
             "frame-ancestors 'none'",
             "object-src 'none'",
             "base-uri 'self'",

@@ -47,6 +47,26 @@ if (! function_exists('slave_version')) {
     }
 }
 
+if (! function_exists('csp_nonce')) {
+    /**
+     * คืนค่า CSP nonce สำหรับใช้ใน inline <script>/<style>
+     *
+     * SecurityHeaders middleware bind ค่า nonce ลง container เฉพาะ web request
+     * - หาก binding ไม่มี (เช่น API request, console, test) → คืน '' เพื่อกัน BindingResolutionException
+     * - ค่าที่ได้ปลอดภัยพร้อมใช้ใน HTML attribute (base64 ของ random_bytes)
+     */
+    function csp_nonce(): string
+    {
+        if (! app()->bound('csp-nonce')) {
+            return '';
+        }
+
+        $nonce = app('csp-nonce');
+
+        return \is_string($nonce) ? $nonce : '';
+    }
+}
+
 if (! function_exists('slave_verify_webhook_signature')) {
     /**
      * ตรวจสอบ HMAC signature ของ webhook ที่มาจาก Master

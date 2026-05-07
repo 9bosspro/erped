@@ -18,6 +18,12 @@ use Illuminate\Support\ServiceProvider;
  *   - mock ใน test ได้ง่ายผ่าน interface binding
  *   - ลด coupling ระหว่าง Master package กับ rate limiting internals
  *   - Core จัดการ boot ตัวเองได้โดยไม่ต้องพึ่ง Master
+ *
+ * หมายเหตุ — Cache Store ของ RateLimiter:
+ *   Laravel framework รองรับ key 'cache.limiter' โดย native ใน CacheServiceProvider
+ *   ($app->make('cache')->driver($app['config']->get('cache.limiter')))
+ *   จึงไม่ต้อง rebind RateLimiter ที่นี่ — แค่ตั้ง 'cache.limiter' = 'redis'
+ *   ใน config/cache.php ก็ enforced ใช้ Redis เฉพาะ rate limiter
  */
 class RateLimitingServiceProvider extends ServiceProvider
 {

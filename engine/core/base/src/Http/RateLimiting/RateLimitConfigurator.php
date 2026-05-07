@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Core\Base\Http\RateLimiting;
 
+use Closure;
 use Core\Base\Contracts\Http\RateLimiting\RateLimiterConfiguratorInterface;
 use Core\Base\Contracts\Http\RateLimiting\RequestFingerprinterInterface;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 /**
  * RateLimitConfigurator — ตั้งค่า Rate Limiting ครอบคลุมทุก scenario ของระบบ
@@ -51,13 +53,14 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
      */
     private const array DEFAULTS = [
         // ── Standard ────────────────────────────────────────────
-        'api' => ['user' => 120,  'guest' => 10,  'window' => 'minute', 'decay' => 1],
-        'web' => ['user' => 120,  'guest' => 30,  'window' => 'minute', 'decay' => 1],
+        'api' => ['user' => 120,  'guest' => 60,  'window' => 'minute', 'decay' => 1],
+        'web' => ['user' => 120,  'guest' => 60,  'window' => 'minute', 'decay' => 1],
         'uploads' => ['user' => 100,  'guest' => 10,  'window' => 'minute', 'decay' => 1],
         'resource' => ['read' => 60,   'write' => 20,  'window' => 'minute', 'decay' => 1],
         // ── Auth ────────────────────────────────────────────────
         'oauth' => ['ip' => 20,    'client' => 10,  'window' => 'minute', 'decay' => 1],
-        'login' => ['ip' => 20,    'fingerprint' => 10, 'email' => 5, 'window' => 'minute', 'decay' => 1],
+        // login — per-identifier เป็น multi-tier (ดู LOGIN_IDENTIFIER_TIERS_DEFAULT)
+        'login' => ['ip' => 20,    'fingerprint' => 10, 'window' => 'minute', 'decay' => 1],
         'register' => ['ip' => 5,     'window' => 'hour',   'decay' => 1],
         'otp' => ['limit' => 5,  'window' => 'minute', 'decay' => 15],   // 5 ครั้ง / 15 นาที
         'password_reset' => ['ip' => 5,    'email' => 3,    'window' => 'hour',   'decay' => 1],
@@ -67,6 +70,35 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         'webhook' => ['ip' => 60,    'origin' => 120, 'window' => 'minute', 'decay' => 1],
         'public' => ['key' => 60,   'ip' => 10,      'window' => 'minute', 'decay' => 1],
     ];
+
+    /**
+     * Multi-tier defaults สำหรับ login per-identifier (progressive backoff)
+     *
+     * Tier ละเอียดขึ้นเรื่อยๆ ตามเวลา — attacker ที่ผ่าน tier แรกได้
+     * จะถูก tier ถัดไปบล็อกด้วย decay window ที่ยาวกว่า
+     *
+     *   Tier 1 — 5 ครั้ง/นาที  : กรอง burst attack
+     *   Tier 2 — 20 ครั้ง/ชั่วโมง : กรอง slow brute-force (1 ครั้ง/3 นาที)
+     *   Tier 3 — 50 ครั้ง/วัน   : กรอง distributed attack (avg 2 ครั้ง/ชั่วโมง)
+     *
+     * ⚠️  ต้องตรงกับ config/myapp.php rate_limits.login.identifier_tiers
+     *
+     * @var list<array{limit: int, window: string, decay: int}>
+     */
+    private const array LOGIN_IDENTIFIER_TIERS_DEFAULT = [
+        ['limit' => 5,  'window' => 'minute', 'decay' => 1],
+        ['limit' => 20, 'window' => 'hour',   'decay' => 1],
+        ['limit' => 50, 'window' => 'day',    'decay' => 1],
+    ];
+
+    /**
+     * Cache รายการ bypass IP/CIDR ที่ load จาก config ตอน boot
+     *
+     * เก็บเป็น property เพื่อ closure ใน RateLimiter::for() อ่านโดยไม่ต้อง re-read config
+     *
+     * @var list<string>
+     */
+    private array $cachedBypassIps = [];
 
     /**
      * @param  RequestFingerprinterInterface  $fingerprinter  inject ผ่าน Laravel DI
@@ -96,7 +128,7 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
             ?? $request->ip()
             ?? '';
 
-        return is_scalar($serviceId) ? (string) $serviceId : '';
+        return \is_scalar($serviceId) ? (string) $serviceId : '';
     }
 
     /**
@@ -106,6 +138,9 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
      */
     public function configure(): void
     {
+        // pre-load bypass list ครั้งเดียว — closure แต่ละตัวอ่านผ่าน $this->cachedBypassIps
+        $this->cachedBypassIps = $this->bypassIps();
+
         // ── Standard ──────────────────────────────────────────
         $this->forUserGuestLimiter('api');
         $this->forUserGuestLimiter('web');
@@ -141,7 +176,7 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
 
         $val = config("core.base::myapp.rate_limits.{$limiter}.{$key}");
 
-        return is_scalar($val) ? (int) $val : $default;
+        return \is_scalar($val) ? (int) $val : $default;
     }
 
     /**
@@ -156,7 +191,7 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
 
         $val = config("core.base::myapp.rate_limits.{$limiter}.window");
 
-        return is_scalar($val) ? (string) $val : $default;
+        return \is_scalar($val) ? (string) $val : $default;
     }
 
     /**
@@ -170,7 +205,7 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         $default = (int) ($defaults['decay'] ?? 1);
 
         $val = config("core.base::myapp.rate_limits.{$limiter}.decay");
-        $decay = is_scalar($val) ? (int) $val : $default;
+        $decay = \is_scalar($val) ? (int) $val : $default;
 
         return max(1, $decay);
     }
@@ -197,6 +232,71 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         };
     }
 
+    /**
+     * อ่านรายการ bypass IP/CIDR จาก config
+     *
+     * เรียกครั้งเดียวตอน boot — capture เข้า closure → ไม่มี per-request overhead
+     *
+     * @return list<string>
+     */
+    private function bypassIps(): array
+    {
+        $raw = config('core.base::myapp.rate_limits.bypass_ips', []);
+
+        if (! \is_array($raw)) {
+            return [];
+        }
+
+        $ips = [];
+        foreach ($raw as $ip) {
+            if (\is_string($ip) && trim($ip) !== '') {
+                $ips[] = trim($ip);
+            }
+        }
+
+        return $ips;
+    }
+
+    /**
+     * ตรวจว่า request IP อยู่ใน bypass list หรือไม่
+     *
+     * @param  list<string>  $bypassIps  IP/CIDR ที่ pre-load จาก config
+     */
+    private function isBypassed(Request $request, array $bypassIps): bool
+    {
+        if ($bypassIps === []) {
+            return false;
+        }
+
+        $ip = $request->ip();
+
+        if ($ip === null || $ip === '') {
+            return false;
+        }
+
+        return IpUtils::checkIp($ip, $bypassIps);
+    }
+
+    /**
+     * Wrap closure ของ RateLimiter::for() ให้ตรวจ bypass list ก่อน
+     *
+     * ถ้า request IP อยู่ใน bypass list → คืน Limit::none() (ข้าม rate limit ทั้งหมด)
+     * ถ้าไม่ → เรียก factory เดิมเพื่อสร้าง Limit ตาม logic เฉพาะของแต่ละ limiter
+     *
+     * @param  Closure(Request): (Limit|list<Limit>)  $factory  closure เดิมที่สร้าง Limit
+     * @return Closure(Request): (Limit|list<Limit>)
+     */
+    private function withBypass(Closure $factory): Closure
+    {
+        return function (Request $request) use ($factory): Limit|array {
+            if ($this->isBypassed($request, $this->cachedBypassIps)) {
+                return Limit::none();
+            }
+
+            return $factory($request);
+        };
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Shared Patterns
     // ═══════════════════════════════════════════════════════════
@@ -216,9 +316,10 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
 
         RateLimiter::for(
             $name,
-            fn (Request $request) => $request->user()
+            $this->withBypass(fn (Request $request) => $request->user()
                 ? $this->makeLimit($userLimit, $window, $decay)->by("{$name}:user:".((string) $request->user()->id))
                 : $this->makeLimit($guestLimit, $window, $decay)->by("{$name}:guest:".((string) $request->ip())),
+            ),
         );
     }
 
@@ -240,14 +341,14 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         $window = $this->window('resource');
         $decay = $this->decay('resource');
 
-        RateLimiter::for('resource', function (Request $request) use ($read, $write, $window, $decay) {
+        RateLimiter::for('resource', $this->withBypass(function (Request $request) use ($read, $write, $window, $decay) {
             $key = (string) ($request->user()?->id ?? $request->ip());
             $isWrite = \in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true);
 
             return $isWrite
                 ? $this->makeLimit($write, $window, $decay)->by("resource:write:{$key}")
                 : $this->makeLimit($read, $window, $decay)->by("resource:read:{$key}");
-        });
+        }));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -271,49 +372,106 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         $window = $this->window('oauth');
         $decay = $this->decay('oauth');
 
-        RateLimiter::for('oauth', function (Request $request) use ($ipLimit, $clientLimit, $window, $decay) {
+        RateLimiter::for('oauth', $this->withBypass(function (Request $request) use ($ipLimit, $clientLimit, $window, $decay) {
             $clientIdRaw = $request->input('client_id') ?? $request->getUser() ?? $request->ip() ?? '';
-            $clientId = is_scalar($clientIdRaw) ? (string) $clientIdRaw : '';
+            $clientId = \is_scalar($clientIdRaw) ? (string) $clientIdRaw : '';
 
             return [
                 $this->makeLimit($ipLimit, $window, $decay)->by('oauth:ip:'.((string) $request->ip())),
                 $this->makeLimit($clientLimit, $window, $decay)->by("oauth:client:{$clientId}"),
             ];
-        });
+        }));
     }
 
     /**
-     * Login: ป้องกัน brute-force (3-layer)
+     * Login: ป้องกัน brute-force (multi-layer + progressive backoff per identifier)
      *
      * ใช้กับ route middleware: throttle:login
      *
-     * Layer 1 — per IP          : กรองกว้าง ป้องกัน bot
-     * Layer 2 — per Fingerprint : ทนต่อ IP rotation (VPN/proxy)
-     * Layer 3 — per Identifier  : email / username / client_id — ป้องกัน per-account stuffing
+     * Layer 1 — per IP          : กรองกว้าง ป้องกัน bot (single tier per minute)
+     * Layer 2 — per Fingerprint : ทนต่อ IP rotation (VPN/proxy) (single tier per minute)
+     * Layer 3 — per Identifier  : email / username / client_id (multi-tier progressive)
+     *                             tier 1: 5/min  → กรอง burst
+     *                             tier 2: 20/hr  → กรอง slow brute-force
+     *                             tier 3: 50/day → กรอง distributed attack
+     *
+     * Progressive backoff: attacker ที่ผ่าน tier แรกได้จะถูก tier ที่ยาวกว่าบล็อก
+     * — โดยไม่ต้องเขียน penalty logic เอง (Laravel native multi-limit pattern)
      */
     private function forLogin(): void
     {
         $perIp = $this->cfg('login', 'ip');
         $perFingerprint = $this->cfg('login', 'fingerprint');
-        $perIdentifier = $this->cfg('login', 'email');
         $window = $this->window('login');
         $decay = $this->decay('login');
+        $identifierTiers = $this->loginIdentifierTiers();
 
-        RateLimiter::for('login', function (Request $request) use ($perIp, $perFingerprint, $perIdentifier, $window, $decay) {
+        RateLimiter::for('login', $this->withBypass(function (Request $request) use ($perIp, $perFingerprint, $window, $decay, $identifierTiers) {
             $fp = (string) $this->fingerprinter->generate($request);
             $idRaw = $request->input('email')
                 ?? $request->input('username')
                 ?? $request->input('client_id')
                 ?? $request->ip()
                 ?? '';
-            $identifier = strtolower(is_scalar($idRaw) ? (string) $idRaw : '');
+            $identifier = strtolower(\is_scalar($idRaw) ? (string) $idRaw : '');
 
-            return [
+            $limits = [
                 $this->makeLimit($perIp, $window, $decay)->by('login:ip:'.((string) $request->ip())),
                 $this->makeLimit($perFingerprint, $window, $decay)->by("login:fp:{$fp}"),
-                $this->makeLimit($perIdentifier, $window, $decay)->by("login:id:{$identifier}"),
             ];
-        });
+
+            // ใส่ progressive tier ต่อ identifier — แต่ละ tier มี key แยก
+            // เพื่อให้ counter ของ tier 1 (per-min) ไม่กิน budget tier 2 (per-hour)
+            foreach ($identifierTiers as $i => $tier) {
+                $limits[] = $this->makeLimit($tier['limit'], $tier['window'], $tier['decay'])
+                    ->by("login:id:{$tier['window']}:{$i}:{$identifier}");
+            }
+
+            return $limits;
+        }));
+    }
+
+    /**
+     * อ่าน multi-tier config สำหรับ login per-identifier
+     *
+     * Schema คาดหวัง: list<array{limit: int, window: string, decay?: int}>
+     * ถ้า config ไม่ valid จะ fallback เป็น LOGIN_IDENTIFIER_TIERS_DEFAULT
+     *
+     * @return list<array{limit: int, window: string, decay: int}>
+     */
+    private function loginIdentifierTiers(): array
+    {
+        $raw = config('core.base::myapp.rate_limits.login.identifier_tiers');
+
+        if (! \is_array($raw) || $raw === []) {
+            return self::LOGIN_IDENTIFIER_TIERS_DEFAULT;
+        }
+
+        $tiers = [];
+        foreach ($raw as $entry) {
+            if (! \is_array($entry)) {
+                continue;
+            }
+
+            $limit = $entry['limit'] ?? null;
+            $window = $entry['window'] ?? null;
+            $decay = $entry['decay'] ?? 1;
+
+            if (! \is_int($limit) || $limit <= 0) {
+                continue;
+            }
+            if (! \in_array($window, ['second', 'minute', 'hour', 'day'], true)) {
+                continue;
+            }
+
+            $tiers[] = [
+                'limit' => $limit,
+                'window' => $window,
+                'decay' => \is_int($decay) && $decay >= 1 ? $decay : 1,
+            ];
+        }
+
+        return $tiers === [] ? self::LOGIN_IDENTIFIER_TIERS_DEFAULT : $tiers;
     }
 
     /**
@@ -330,7 +488,7 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
 
         RateLimiter::for(
             'register',
-            fn (Request $request) => $this->makeLimit($limit, $window, $decay)->by('register:'.((string) $request->ip())),
+            $this->withBypass(fn (Request $request) => $this->makeLimit($limit, $window, $decay)->by('register:'.((string) $request->ip()))),
         );
     }
 
@@ -348,16 +506,16 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         $window = $this->window('otp');
         $decay = $this->decay('otp');
 
-        RateLimiter::for('otp', function (Request $request) use ($limit, $window, $decay) {
+        RateLimiter::for('otp', $this->withBypass(function (Request $request) use ($limit, $window, $decay) {
             $idRaw = $request->user()?->id
                 ?? $request->input('email')
                 ?? $request->input('phone')
                 ?? $request->ip()
                 ?? '';
-            $identifier = is_scalar($idRaw) ? (string) $idRaw : '';
+            $identifier = \is_scalar($idRaw) ? (string) $idRaw : '';
 
             return $this->makeLimit($limit, $window, $decay)->by("otp:{$identifier}");
-        });
+        }));
     }
 
     /**
@@ -375,15 +533,15 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         $window = $this->window('password_reset');
         $decay = $this->decay('password_reset');
 
-        RateLimiter::for('password-reset', function (Request $request) use ($perIp, $perEmail, $window, $decay) {
+        RateLimiter::for('password-reset', $this->withBypass(function (Request $request) use ($perIp, $perEmail, $window, $decay) {
             $emailRaw = $request->input('email') ?? $request->ip() ?? '';
-            $email = strtolower(is_scalar($emailRaw) ? (string) $emailRaw : '');
+            $email = strtolower(\is_scalar($emailRaw) ? (string) $emailRaw : '');
 
             return [
                 $this->makeLimit($perIp, $window, $decay)->by('pwd-reset:ip:'.((string) $request->ip())),
                 $this->makeLimit($perEmail, $window, $decay)->by("pwd-reset:email:{$email}"),
             ];
-        });
+        }));
     }
 
     /**
@@ -401,8 +559,8 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
 
         RateLimiter::for(
             'sensitive',
-            fn (Request $request) => $this->makeLimit($limit, $window, $decay)
-                ->by('sensitive:'.((string) ($request->user()?->id ?? $request->ip()))),
+            $this->withBypass(fn (Request $request) => $this->makeLimit($limit, $window, $decay)
+                ->by('sensitive:'.((string) ($request->user()?->id ?? $request->ip())))),
         );
     }
 
@@ -432,14 +590,14 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         $window = $this->window('service');
         $decay = $this->decay('service');
 
-        RateLimiter::for('service', function (Request $request) use ($limit, $burst, $window, $decay) {
+        RateLimiter::for('service', $this->withBypass(function (Request $request) use ($limit, $burst, $window, $decay) {
             $serviceId = self::resolveServiceId($request);
 
             return [
                 Limit::perSecond($burst)->by("service:burst:{$serviceId}"),
                 $this->makeLimit($limit, $window, $decay)->by("service:sustained:{$serviceId}"),
             ];
-        });
+        }));
     }
 
     /**
@@ -461,7 +619,7 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         $window = $this->window('webhook');
         $decay = $this->decay('webhook');
 
-        RateLimiter::for('webhook', function (Request $request) use ($ipLimit, $originLimit, $window, $decay) {
+        RateLimiter::for('webhook', $this->withBypass(function (Request $request) use ($ipLimit, $originLimit, $window, $decay) {
             $source = (string) (
                 $request->header('Origin')
                 ?? $request->header('Referer')
@@ -474,7 +632,7 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
                 $this->makeLimit($ipLimit, $window, $decay)->by('webhook:ip:'.((string) $request->ip())),
                 $this->makeLimit($originLimit, $window, $decay)->by("webhook:host:{$host}"),
             ];
-        });
+        }));
     }
 
     /**
@@ -495,7 +653,7 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
         $window = $this->window('public');
         $decay = $this->decay('public');
 
-        RateLimiter::for('public', function (Request $request) use ($perKey, $perIp, $window, $decay) {
+        RateLimiter::for('public', $this->withBypass(function (Request $request) use ($perKey, $perIp, $window, $decay) {
             $apiKey = (string) ($request->header('X-Api-Key') ?? '');
 
             if ($apiKey !== '') {
@@ -504,6 +662,6 @@ final class RateLimitConfigurator implements RateLimiterConfiguratorInterface
             }
 
             return $this->makeLimit($perIp, $window, $decay)->by('public:ip:'.((string) $request->ip()));
-        });
+        }));
     }
 }

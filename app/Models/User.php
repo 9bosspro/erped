@@ -8,11 +8,14 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable, HasApiTokens;
+    use HasFactory, Notifiable, TwoFactorAuthenticatable, HasApiTokens, HasRoles, HasUuids, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -24,6 +27,20 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'username',
+        'name_th',
+        'name_en',
+        'nickname_th',
+        'nickname_en',
+        'metadata',
+        'count_in',
+        'score',
+        'coin',
+        'is_active',
+        'expires_at',
+        'guide_by',
+        'created_by',
+        'updated_by',
     ];
 
     /**
@@ -49,6 +66,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'metadata' => 'array',
+            'is_active' => 'boolean',
         ];
     }
 }

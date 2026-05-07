@@ -14,6 +14,8 @@ use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
@@ -163,5 +165,36 @@ return Application::configure(basePath: dirname(__DIR__))
             ] : [];
 
             return Response::apiErrorResponse($message, $status, $data);
+        });
+
+        // ── Inertia error handling ────────────────────────────────────
+        // ทำงานเฉพาะ Inertia request (X-Inertia: true) ไม่ใช่ API/JSON
+        // - 419 (CSRF mismatch) → redirect back พร้อม flash error เพื่อรักษา UX SPA
+        // - 4xx/5xx ใน production → render Inertia error page เพื่อไม่ให้ SPA แตก
+        // - dev environment → ปล่อยให้ Whoops/Ignition แสดง stack trace ตามปกติ
+        $exceptions->respond(function (SymfonyResponse $response, Throwable $_e, Request $request): SymfonyResponse {
+            if (! $request->header('X-Inertia')) {
+                return $response;
+            }
+
+            $status = $response->getStatusCode();
+
+            if ($status === 419) {
+                return back()->with('error', 'หน้าเว็บหมดอายุ กรุณาลองใหม่อีกครั้ง');
+            }
+
+            if (app()->environment(['local', 'testing'])) {
+                return $response;
+            }
+
+            if (\in_array($status, [403, 404, 500, 503], true)) {
+                return Inertia::render('errors/error', [
+                    'status' => $status,
+                ])
+                    ->toResponse($request)
+                    ->setStatusCode($status);
+            }
+
+            return $response;
         });
     })->create();

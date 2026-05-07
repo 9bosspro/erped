@@ -21,7 +21,10 @@ use Illuminate\Http\Request;
  *   - accept-enc   : encoding support fingerprint
  *   - x-visitor-id : client-side fingerprint จาก FingerprintJS (optional)
  *
- * ⚠️  ใช้ sha256 เพื่อ performance — ไม่เหมาะกับ cryptographic use case
+ * ⚠️  hash ผูกกับ APP_KEY (HMAC) — ป้องกัน fingerprint correlation ข้าม environment
+ *     และทำให้ attacker ที่เห็น Redis logs ไม่สามารถ pre-compute hash ของ user เป้าหมายได้
+ *
+ * ⚠️  ใช้ sha256 เพื่อ performance — ไม่เหมาะกับ cryptographic use case อื่น
  */
 final class RequestFingerprinter implements RequestFingerprinterInterface
 {
@@ -30,9 +33,10 @@ final class RequestFingerprinter implements RequestFingerprinterInterface
      *
      * Signals ทั้งหมดถูก normalize เป็น lowercase และ trim whitespace
      * ก่อน hash เพื่อป้องกัน case-sensitive mismatch ระหว่าง request
+     * จากนั้น HMAC ด้วย APP_KEY เพื่อ bind hash เข้ากับ application instance
      *
      * @param  Request  $request  HTTP request ที่ต้องการ fingerprint
-     * @return string sha256 hash (64 chars)
+     * @return string hmac-sha256 hash (64 chars)
      */
     public function generate(Request $request): string
     {
@@ -50,6 +54,11 @@ final class RequestFingerprinter implements RequestFingerprinterInterface
             static fn (string $signal): bool => $signal !== '',
         );
 
-        return hash('sha256', implode('|', $signals));
+        // ใช้ APP_KEY เป็น secret — fallback "" ในกรณี boot ก่อน config โหลด (เช่น tinker)
+        // hash_hmac คงที่ปลอดภัยกว่า hash ตรงเพราะ key เป็น secret และไม่ส่งออก
+        $appKey = config('app.key');
+        $secret = \is_string($appKey) ? $appKey : '';
+
+        return hash_hmac('sha256', implode('|', $signals), $secret);
     }
 }

@@ -40,6 +40,8 @@ final class JwtHelper implements JwtHelperInterface
 
     private const int PARSE_CACHE_MAX = 8;
 
+    private const RESERVED_CLAIMS = ['iss', 'aud', 'jti', 'iat', 'nbf', 'exp', 'data'];
+
     private Configuration $config;
 
     private int $accessTtl;
@@ -121,6 +123,7 @@ final class JwtHelper implements JwtHelperInterface
 
         $config = match (true) {
             $this->algorithm === 'EdDSA' => $this->configureEddsa($privateKey, $publicKey),
+            $this->algorithm === 'EdDSAClient' => $this->configureEddsaClient($privateKey, $publicKey),
             str_starts_with($this->algorithm, 'RS') => $this->configureRsa($privateKey, $publicKey),
             default => $this->configureHmac($secretKey),
         };
@@ -131,7 +134,6 @@ final class JwtHelper implements JwtHelperInterface
     // ═══════════════════════════════════════════════════════════
     //  Token Creation
     // ═══════════════════════════════════════════════════════════
-
     public function createAccessToken(int $userId, array $claims = []): string
     {
         if ($userId <= 0) {
@@ -162,6 +164,19 @@ final class JwtHelper implements JwtHelperInterface
 
     public function buildCustomToken(mixed $data, int $ttl = 3600, array $claims = []): string
     {
+        if ($ttl <= 0) {
+            throw new InvalidArgumentException("TTL must be greater than 0, got {$ttl}.");
+        }
+        if (json_encode($data) === false) {
+            throw new InvalidArgumentException('Data must be JSON-serializable.');
+        }
+        $conflicts = array_intersect_key($claims, array_flip(self::RESERVED_CLAIMS));
+        if (! empty($conflicts)) {
+            throw new InvalidArgumentException(
+                'Claims conflict with reserved keys: '.implode(', ', array_keys($conflicts)),
+            );
+        }
+
         $now = new DateTimeImmutable;
         $jti = Str::orderedUuid()->toString();
 
@@ -398,7 +413,7 @@ final class JwtHelper implements JwtHelperInterface
         $claims = $parsed->claims()->all();
 
         return array_map(
-            static fn(mixed $v) => $v instanceof DateTimeImmutable ? $v->getTimestamp() : $v,
+            static fn (mixed $v) => $v instanceof DateTimeImmutable ? $v->getTimestamp() : $v,
             $claims,
         );
     }
@@ -496,7 +511,7 @@ final class JwtHelper implements JwtHelperInterface
         }
 
         $claims = $parsed->claims();
-        $toTs = static fn(mixed $v) => $v instanceof DateTimeImmutable ? $v->getTimestamp() : null;
+        $toTs = static fn (mixed $v) => $v instanceof DateTimeImmutable ? $v->getTimestamp() : null;
 
         return [
             'iss' => $claims->get('iss'),
@@ -747,7 +762,7 @@ final class JwtHelper implements JwtHelperInterface
         // HMAC-SHA256 ต้องการ key อย่างน้อย 32 bytes เพื่อความปลอดภัย
         if (\strlen($key) < 32) {
             throw new RuntimeException(
-                'HMAC key ต้องมีความยาวอย่างน้อย 32 bytes — ปัจจุบัน ' . \strlen($key) . ' bytes',
+                'HMAC key ต้องมีความยาวอย่างน้อย 32 bytes — ปัจจุบัน '.\strlen($key).' bytes',
             );
         }
 
@@ -778,6 +793,81 @@ final class JwtHelper implements JwtHelperInterface
     }
 
     private function configureEddsa(?string $priv = null, ?string $pub = null): Configuration
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        //    $masterKeyBase64 = config('core.base::security.masterkey');
+        $jwtSeed = config('core.base::jwt.jwt_seed');
+        if ($jwtSeed === null) {
+            throw new RuntimeException('Master Key is not configured or invalid. Please check MASTERKEY in your .env file.');
+        }
+        // dd($jwtSeed);
+        /*  $masterKey32 = parseKey($masterKeyBase64);
+        if ($masterKey32 === null) {
+            throw new RuntimeException('Master Key is not configured or invalid. Please check MASTERKEY in your .env file.');
+        }
+
+        $masterSeed = genHashByName('master_key_seed', $masterKey32, 32); // คีสำรอง
+        if ($masterSeed === null) {
+            throw new RuntimeException('Failed to generate master seed from Master Key.');
+        }
+
+        $jwtSeed = genHashByName('signature_key_derivation_jwt', $masterSeed, 32);
+        if ($jwtSeed === null) {
+            throw new RuntimeException('Failed to generate JWT signature seed.');
+        } */
+
+        $generateSignatureKeyPairjwt = $this->generateSignatureKeyPairforjwt($jwtSeed, true);
+
+        $privateKeyVal = (string) $generateSignatureKeyPairjwt['secret'];
+        $publicKeyVal = (string) $generateSignatureKeyPairjwt['public'];
+        //
+        //  $privateKeyVal = $priv ?? config('core.base::jwt.privatekey', '');
+        $privateKey = $privateKeyVal;
+
+        //   $publicKeyVal = $pub ?? config('core.base::jwt.publickey', '');
+        $publicKey = $publicKeyVal;
+
+        // Decode Base64 / Base64URL เฉพาะเมื่อไม่ใช่ PEM format
+        // PEM keys ขึ้นต้นด้วย "-----BEGIN..." — ห้ามนำไป decode ซ้ำ
+        /*   if ($privateKey !== '' && ! \str_starts_with($privateKey, '-----')) {
+            $decoded = \base64_decode(\rtrim(\strtr($privateKey, '-_', '+/'), '='), true);
+            if ($decoded === false) {
+                throw new RuntimeException('EdDSA private key: base64 decode ล้มเหลว — ตรวจสอบ config key');
+            }
+            $privateKey = $decoded;
+        }
+
+        if ($publicKey !== '' && ! \str_starts_with($publicKey, '-----')) {
+            $decoded = \base64_decode(\rtrim(\strtr($publicKey, '-_', '+/'), '='), true);
+            if ($decoded === false) {
+                throw new RuntimeException('EdDSA public key: base64 decode ล้มเหลว — ตรวจสอบ config key');
+            }
+            $publicKey = $decoded;
+        } */
+
+        if ($privateKey === '') {
+            throw new RuntimeException('EdDSA private key ไม่ได้ตั้งค่า — ตรวจสอบ config core.base::jwt.privatekey');
+        }
+
+        if ($publicKey === '') {
+            throw new RuntimeException('EdDSA public key ไม่ได้ตั้งค่า — ตรวจสอบ config core.base::jwt.publickey');
+        }
+
+        $cached = Configuration::forAsymmetricSigner(
+            new Eddsa,
+            InMemory::plainText($privateKey),
+            InMemory::plainText($publicKey),
+        );
+
+        return $cached;
+    }
+
+    private function configureEddsaClient(?string $priv = null, ?string $pub = null): Configuration
     {
         static $cached = null;
 

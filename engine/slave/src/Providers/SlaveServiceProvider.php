@@ -6,6 +6,7 @@ namespace Slave\Providers;
 
 use Core\Base\Traits\LoadAndPublishDataTrait;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 use Slave\Contracts\Master\MasterClientInterface;
 use Slave\Http\Middleware\ForceTheme;
@@ -42,6 +43,18 @@ class SlaveServiceProvider extends ServiceProvider
         $this->loadHelpers(['Slave']);
         $this->loadRoutes(['api']);
         //  $this->registerMiddlewareAliases();
+        $this->registerBladeDirectives();
+    }
+
+    /**
+     * ลงทะเบียน Blade directives ของ Slave
+     *
+     * @nonce — ใส่ attribute nonce="..." ใน inline script/style ให้อัตโนมัติ
+     *          ใช้ภายใน Blade เท่านั้น เช่น  <script @nonce>...</script>
+     */
+    private function registerBladeDirectives(): void
+    {
+        Blade::directive('nonce', static fn(): string => "<?php echo 'nonce=\"' . e(csp_nonce()) . '\"'; ?>");
     }
 
     /**

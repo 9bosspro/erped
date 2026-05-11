@@ -4,148 +4,355 @@ declare(strict_types=1);
 
 namespace Slave\Services\Master;
 
-use Core\Base\Support\Helpers\Crypto\SodiumHelper;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use RuntimeException;
 use Slave\Contracts\Master\MasterClientInterface;
+use Slave\Contracts\Master\TokenFlow;
 
 /**
  * MasterClientService — HTTP client หลักสำหรับติดต่อ Master Server
  *
- * รวม flow ของการขอ token ทั้ง OAuth2 และ JWT ไว้ในโครงสร้างเดียว
- * โดยแยกหน้าที่ตามหลัก SOLID:
- *  - dispatchJson()        ส่ง JSON request พร้อม retry token เมื่อ 401
- *  - resolveToken()        ดึง token จาก cache หรือเรียก fetchAndCacheToken()
- *  - fetchAndCacheToken()  authenticate กับ Master ตาม flow ที่ระบุ และ cache ผลลัพธ์
+ * แยกการบริหารจัดการ Transport layer ออกจาก Token Management ตามหลัก SRP
+ * รับผิดชอบเฉพาะ:
+ *  - สร้าง HTTP Request พร้อม config & headers มาตรฐาน
+ *  - ดึง token จาก TokenManager เพื่อแนบใน request
+ *  - จัดการ fallback และ automatic retries
  */
 final class MasterClientService implements MasterClientInterface
 {
-    /** TTL ขั้นต่ำของ cache token (วินาที) */
-    private const int MIN_CACHE_TTL = 300;
+    private string $masterUrl;
 
-    /** Buffer ที่ตัดออกจาก expires_in ก่อนใช้เป็น TTL (วินาที) */
-    private const int CACHE_TTL_BUFFER = 300;
+    private string $clientId;
 
-    /** Default expires_in หาก Master ไม่ส่งกลับมา (12 ชั่วโมง) */
-    private const int DEFAULT_EXPIRES_IN = 43200;
+    private string $clientSecret;
 
-    /** Timeout ของ HTTP client หลัก (วินาที) */
-    private const int HTTP_TIMEOUT = 15;
+    private int $timeout;
 
-    private const int HTTP_RETRY_TIMES = 2;
+    private int $retryTimes;
 
-    private const int HTTP_RETRY_SLEEP_MS = 100;
+    private int $retryDelay;
 
-    /** Endpoint ของ flow OAuth2 */
-    private const string FLOW_OAUTH_ENDPOINT = '/oauth/token';
+    /** Flow ที่ใช้แนบ token เมื่อส่ง request (เปลี่ยนด้วย withFlow()) */
+    private TokenFlow $activeFlow = TokenFlow::OAuth;
 
-    private const string FLOW_OAUTH_GRANT = 'client_credentials';
+    /** Scope ของ token ที่ใช้แนบ request (เปลี่ยนด้วย withScope()) */
+    private string $activeScope;
 
-    private const string FLOW_OAUTH_PREFIX = 'master_token';
+    /** HTTP headers เพิ่มเติมที่แนบไปกับทุก request (เปลี่ยนด้วย withHeaders()) */
+    private array $extraHeaders = [];
 
-    /** Endpoint ของ flow JWT */
-    private const string FLOW_JWT_ENDPOINT = '/api/v1/jwt/token';
+    /** ควบคุมการแนบ Access Token ไปกับ Request (เปลี่ยนด้วย withoutToken()) */
+    private bool $attachToken = true;
 
-    private const string FLOW_JWT_GRANT = 'client_credentials_jwt';
+    /** โทเคนแบบระบุเจาะจงด้วยมือ (เปลี่ยนด้วย withToken()) - null คือให้ Auto-Manager จัดการ */
+    private ?string $explicitToken = null;
 
-    private const string FLOW_JWT_PREFIX = 'master_tokenjwt';
+    /** ระยะเวลาแคชผลลัพธ์ (วินาที) - 0 คือปิดการใช้แคช */
+    private int $cacheTtl = 0;
+
+    /** ชื่อช่องทางจัดเก็บแคช เช่น 'redis', 'session' - null คือค่าดีฟอลต์ */
+    private ?string $explicitCacheStore = null;
+
+    /** Suffix พิเศษสำหรับต่อท้ายกุญแจแคชเพื่อแยก Context */
+    private string $cacheSuffix = '';
 
     public function __construct(
-        private readonly string $masterUrl,
-        private readonly string $clientId,
-        private readonly string $clientSecret,
-    ) {}
+        string $masterUrl,
+        string $clientId,
+        string $clientSecret,
+        private TokenManager $tokenManager,
+        string $defaultScope = '',
+    ) {
+        $this->masterUrl    = rtrim($masterUrl, '/');
+        $this->clientId     = $clientId;
+        $this->clientSecret = $clientSecret;
+        $this->activeScope  = self::normalizeScope($defaultScope);
+
+        // Load configurations from config like BackendApiClient pattern
+        $this->timeout    = (int) config('slave::client.timeout', 15);
+        $this->retryTimes = (int) config('slave::client.retry_times', 2);
+        $this->retryDelay = (int) config('slave::client.retry_delay', 100);
+    }
 
     /**
-     * ส่ง GET request ไปยัง Master API
-     *
-     * @param  array<string, mixed>  $query
-     * @return array<string, mixed>
+     * Normalize scope string ให้เป็น canonical form
      */
+    private static function normalizeScope(string $scope): string
+    {
+        if ($scope === '') {
+            return '';
+        }
+
+        $parts = explode(' ', Str::squish($scope));
+        $parts = array_values(array_unique(array_filter($parts)));
+        sort($parts);
+
+        return implode(' ', $parts);
+    }
+
+    // ─── Fluent Builders ────────────────────────────────────────────────────
+
+    /**
+     * คืน instance ใหม่ที่ใช้ token flow ที่ระบุ
+     */
+    public function withFlow(TokenFlow $flow): static
+    {
+        $clone = clone $this;
+        $clone->activeFlow = $flow;
+
+        return $clone;
+    }
+
+    /**
+     * คืน instance ใหม่ที่ขอ token ด้วย scope ที่ระบุ
+     */
+    public function withScope(string $scope): static
+    {
+        $clone = clone $this;
+        $clone->activeScope = self::normalizeScope($scope);
+
+        return $clone;
+    }
+
+    /**
+     * คืน instance ใหม่ที่ใช้ credentials ที่ระบุ (รวมทั้งอัปเดตไปยัง TokenManager ด้วย)
+     */
+    public function withCredentials(string $clientId, string $clientSecret): static
+    {
+        $clone = clone $this;
+        $clone->clientId     = $clientId;
+        $clone->clientSecret = $clientSecret;
+
+        // สำคัญ: ส่งต่อ credentials ชุดใหม่ไปยัง TokenManager cloned instance ด้วย
+        $clone->tokenManager = $this->tokenManager->withCredentials($clientId, $clientSecret);
+
+        return $clone;
+    }
+
+    /**
+     * คืน instance ใหม่ที่บังคับใช้ Bearer token ตามที่ระบุโดยตรง
+     */
+    public function withToken(string $token): static
+    {
+        $clone = clone $this;
+        $clone->explicitToken = $token;
+        $clone->attachToken   = true; // รับรองว่ามีการแนบแน่ๆ
+
+        return $clone;
+    }
+    /**
+     * คืน instance ใหม่ที่ไม่แนบ access token ใดๆ (Alias of withoutToken)
+     */
+    public function disableToken(): static
+    {
+        return $this->withoutToken();
+    }
+
+    /**
+     * คืน instance ใหม่ที่แนบ HTTP headers เพิ่มเติมไปกับทุก request
+     */
+    public function withHeaders(array $headers): static
+    {
+        $clone = clone $this;
+        $clone->extraHeaders = [...$this->extraHeaders, ...$headers];
+
+        return $clone;
+    }
+
+    /**
+     * คืน instance ใหม่ที่จะไม่แนบ access token ไปกับ request (สำหรับ public endpoints)
+     */
+    public function withoutToken(): static
+    {
+        $clone = clone $this;
+        $clone->attachToken   = false;
+        $clone->explicitToken = null; // 🛡️ เคลียร์ manual token เผื่อทิ้งไว้ เพื่อความปลอดภัยสูงสุด
+
+        return $clone;
+    }
+
+    /**
+     * เปิดใช้งานการแคชผลลัพธ์สำหรับ request นี้ (รองรับเฉพาะ GET เท่านั้นเพื่อความปลอดภัย)
+     */
+    public function cache(int $seconds, ?string $store = null): static
+    {
+        $clone = clone $this;
+        $clone->cacheTtl = $seconds;
+        $clone->explicitCacheStore = $store;
+
+        return $clone;
+    }
+
+    /**
+     * คืน instance ใหม่ที่ปรับการกำหนดค่า Token Store ใน TokenManager
+     */
+    public function withTokenStore(?string $store): static
+    {
+        $clone = clone $this;
+        $clone->tokenManager = $this->tokenManager->withTokenStore($store);
+
+        return $clone;
+    }
+
+    public function withCacheSuffix(string $suffix): static
+    {
+        $clone = clone $this;
+        $clone->cacheSuffix  = trim($suffix);
+        // 🔥 ส่งต่อให้ TokenManager ด้วย เพื่อให้มันต่อท้าย Cache Key ตอนเก็บ Token ด้วยเช่นกันครับ
+        $clone->tokenManager = $this->tokenManager->withCacheSuffix($suffix);
+
+        return $clone;
+    }
+
+    // ─── HTTP Methods ────────────────────────────────────────────────────────
+
+    /**
+     * ส่ง HTTP request และคืนค่าดิบ Response object โดยตรง
+     */
+    public function sendRequest(string $method, string $endpoint, array $options = []): Response
+    {
+        $method = strtoupper($method);
+
+        return $this->withTokenRetry(
+            fn(): Response => match ($method) {
+                'GET'    => $this->client()->get($endpoint, $options),
+                'POST'   => $this->client()->post($endpoint, $options),
+                'PUT'    => $this->client()->put($endpoint, $options),
+                'PATCH'  => $this->client()->patch($endpoint, $options),
+                'DELETE' => $this->client()->delete($endpoint, $options),
+                default  => throw new RuntimeException("Unsupported HTTP method: {$method}"),
+            }
+        );
+    }
+
     public function get(string $endpoint, array $query = []): array
     {
-        return $this->dispatchJson(
-            'GET',
-            $endpoint,
-            fn(PendingRequest $client): Response => $client->get($endpoint, $query),
-        );
+        return $this->dispatchJson('GET', $endpoint, $query);
     }
 
-    /**
-     * ส่ง POST request ไปยัง Master API
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
     public function post(string $endpoint, array $data = []): array
     {
-        return $this->dispatchJson(
-            'POST',
-            $endpoint,
-            fn(PendingRequest $client): Response => $client->post($endpoint, $data),
-        );
+        return $this->dispatchJson('POST', $endpoint, $data);
     }
 
-    /**
-     * ส่ง PUT request ไปยัง Master API
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
     public function put(string $endpoint, array $data = []): array
     {
-        return $this->dispatchJson(
-            'PUT',
-            $endpoint,
-            fn(PendingRequest $client): Response => $client->put($endpoint, $data),
-        );
+        return $this->dispatchJson('PUT', $endpoint, $data);
     }
 
-    /**
-     * ส่ง PATCH request ไปยัง Master API
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
     public function patch(string $endpoint, array $data = []): array
     {
-        return $this->dispatchJson(
-            'PATCH',
-            $endpoint,
-            fn(PendingRequest $client): Response => $client->patch($endpoint, $data),
-        );
+        return $this->dispatchJson('PATCH', $endpoint, $data);
     }
 
-    /**
-     * ส่ง DELETE request ไปยัง Master API
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
     public function delete(string $endpoint, array $data = []): array
     {
-        return $this->dispatchJson(
-            'DELETE',
-            $endpoint,
-            fn(PendingRequest $client): Response => $client->delete($endpoint, $data),
-        );
+        return $this->dispatchJson('DELETE', $endpoint, $data);
     }
+
+    // ─── File Transfer & Binary Operations ────────────────────────────
+
+    public function upload(
+        string $endpoint,
+        string $name,
+        mixed $contents,
+        string $filename = '',
+        string $mimeType = '',
+        array $fields = [],
+    ): array {
+        $response = $this->withTokenRetry(
+            fn(): Response => $this->client()
+                ->attach(
+                    $name,
+                    $contents,
+                    $filename !== '' ? $filename : null,
+                    $mimeType !== '' ? ['Content-Type' => $mimeType] : [],
+                )
+                ->post($endpoint, $fields),
+        );
+
+        if ($response->failed()) {
+            throw new RuntimeException(
+                "POST {$endpoint} failed [{$response->status()}]: {$response->body()}",
+            );
+        }
+
+        return $this->extractJsonArray($response);
+    }
+
+    public function uploadMany(
+        string $endpoint,
+        array $files,
+        array $fields = [],
+    ): array {
+        $response = $this->withTokenRetry(
+            function () use ($endpoint, $files, $fields): Response {
+                $client = $this->client();
+
+                foreach ($files as $file) {
+                    $mimeType = $file['mimeType'] ?? '';
+                    $client->attach(
+                        $file['name'],
+                        $file['contents'],
+                        $file['filename'] ?? null,
+                        $mimeType !== '' ? ['Content-Type' => $mimeType] : [],
+                    );
+                }
+
+                return $client->post($endpoint, $fields);
+            },
+        );
+
+        if ($response->failed()) {
+            throw new RuntimeException(
+                "POST {$endpoint} failed [{$response->status()}]: {$response->body()}",
+            );
+        }
+
+        return $this->extractJsonArray($response);
+    }
+
+    public function uploadStream(
+        string $endpoint,
+        mixed $stream,
+        string $mimeType = 'application/octet-stream',
+        string $method = 'PUT',
+    ): array {
+        $method   = strtoupper($method);
+        $response = $this->withTokenRetry(
+            function () use ($endpoint, $stream, $mimeType, $method): Response {
+                $client = $this->client()->withBody($stream, $mimeType);
+
+                return match ($method) {
+                    'POST'  => $client->post($endpoint),
+                    default => $client->put($endpoint),
+                };
+            },
+        );
+
+        if ($response->failed()) {
+            throw new RuntimeException(
+                "{$method} {$endpoint} failed [{$response->status()}]: {$response->body()}",
+            );
+        }
+
+        return $this->extractJsonArray($response);
+    }
+
+    // ─── Utility & Domain Methods ───────────────────────────────────────────
 
     public function getBaseUrl(): string
     {
         return $this->masterUrl;
     }
 
-    /**
-     * ตรวจสอบว่า Master Server ตอบสนองได้ปกติหรือไม่
-     */
     public function ping(): bool
     {
-
         try {
             $response = $this->withTokenRetry(
                 fn(): Response => $this->client()->post('/api/v1/clients/ping'),
@@ -157,123 +364,141 @@ final class MasterClientService implements MasterClientInterface
         }
     }
 
-    /**
-     * ดึงข้อมูล licence (cache 1 ชั่วโมง)
-     *
-     * @return array<string, mixed>|null
-     */
     public function getLicence(): ?array
     {
-        $cacheKey = "licence:{$this->clientId}";
-        $cached   = $this->cache()->get($cacheKey);
+        try {
+            // 🚀 REFACTOR DRY: นำระบบ Unified Cache ที่สร้างไว้มาประยุกต์ใช้ซ้ำ ลดความซับซ้อนและเพิ่มความปลอดภัย
+            return $this->cache(3600)->get('/api/v1/licence/check');
+        } catch (\Throwable) {
+            return null; // รักษาสัญญา Contract เดิม คืน null เมื่อล้มเหลว
+        }
+    }
 
-        if (\is_array($cached)) {
-            /** @var array<string, mixed> $cached */
-            return $cached;
+    public function getFiles(): array
+    {
+        // 🚀 REFACTOR DRY: ใช้ Wrapper สำเร็จรูปที่จัดการการยิงและแกะ JSON ให้อยู่แล้ว
+        return $this->get('/api/files');
+    }
+
+    // ─── Token Management Delegation ──────────────────────────────────────────
+    // ทุก Method ด้านล่าง หากรับค่า null จะดึงค่าจาก Active State ของ Client ณ ขณะนั้นมาใช้โดยอัตโนมัติครับ!
+
+    public function getToken(?TokenFlow $flow = null, ?string $scope = null): string
+    {
+        $flow  ??= $this->activeFlow;
+        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+
+        return $this->tokenManager->getToken($flow, $scope);
+    }
+
+    public function clearToken(?TokenFlow $flow = null, ?string $scope = null): void
+    {
+        $flow  ??= $this->activeFlow;
+        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+
+        $this->tokenManager->clear($flow, $scope);
+    }
+
+    public function clearAllTokens(): void
+    {
+        $this->tokenManager->clearAll();
+    }
+
+    public function storeToken(array $data, ?TokenFlow $flow = null, ?string $scope = null): void
+    {
+        $flow  ??= $this->activeFlow;
+        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+
+        $this->tokenManager->store($data, $flow, $scope);
+    }
+
+    public function getRefreshToken(?TokenFlow $flow = null, ?string $scope = null): ?string
+    {
+        $flow  ??= $this->activeFlow;
+        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+
+        return $this->tokenManager->getRefreshToken($flow, $scope);
+    }
+
+    public function isExpired(?TokenFlow $flow = null, ?string $scope = null): bool
+    {
+        $flow  ??= $this->activeFlow;
+        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+
+        return $this->tokenManager->isExpired($flow, $scope);
+    }
+
+    public function debugCachedTokens(): array
+    {
+        return $this->tokenManager->debugAllTokens();
+    }
+
+    public function getCachedManifest(): array
+    {
+        return $this->tokenManager->getManifestKeys();
+    }
+
+    // ─── Private: Core Infrastructure ────────────────────────────────────────
+
+    private function dispatchJson(string $method, string $endpoint, array $payload): array
+    {
+        // ตรวจสอบสถานะการทำ Cache (จำกัดเฉพาะ GET Request)
+        $isCacheable = $method === 'GET' && $this->cacheTtl > 0;
+        $store = $this->explicitCacheStore !== null ? Cache::store($this->explicitCacheStore) : Cache::store();
+        $cacheKey = '';
+
+        if ($isCacheable) {
+            $cacheKey = $this->generateCacheKey($method, $endpoint, $payload);
+            $cachedResult = $store->get($cacheKey);
+
+            if (\is_array($cachedResult)) {
+                return $cachedResult; // ⚡ Return Early if HIT cache
+            }
         }
 
-        $response = $this->withTokenRetry(
-            fn(): Response => $this->client()->get('/api/v1/licence/check'),
-        );
+        // 🚀 DRY REFACTOR: รวบยอดการยิง Request ผ่านช่องทางหลัก sendRequest() เพื่อรวมศูนย์ logic ทั้งหมดไว้จุดเดียว
+        $response = $this->sendRequest($method, $endpoint, $payload);
 
-        if (! $response->successful()) {
-            return null;
+        if ($response->failed()) {
+            throw new RuntimeException(
+                "{$method} {$endpoint} failed [{$response->status()}]: {$response->body()}",
+            );
         }
 
         $data = $this->extractJsonArray($response);
-        $this->cache()->put($cacheKey, $data, now()->addHour());
+
+        // เก็บลง Cache หากเงื่อนไขครบถ้วน
+        if ($isCacheable) {
+            $store->put($cacheKey, $data, now()->addSeconds($this->cacheTtl));
+        }
 
         return $data;
     }
 
     /**
-     * ดึงรายการไฟล์จาก Master
-     *
-     * @return array<string, mixed>
+     * สร้าง Unique identifier Key สำหรับแคชแต่ละ request
      */
-    public function getFiles(): array
+    private function generateCacheKey(string $method, string $endpoint, array $params = []): string
     {
-        $response = $this->withTokenRetry(
-            fn(): Response => $this->client()->get('/api/files'),
-        );
+        $baseIdentifier = "master_api_res:{$this->clientId}:{$method}:" . trim($endpoint, '/');
 
-        if ($response->failed()) {
-            throw new \RuntimeException(
-                "Failed to fetch files [{$response->status()}]",
-            );
-        }
+        // 🌟 สร้างสำเนาและจัดเรียงคีย์ (Canonical Sorting) เพื่อให้ Cache Hits เสถียรที่สุดแม้ส่งพารามิเตอร์สลับลำดับกัน
+        $safeParams = $params;
+        ksort($safeParams);
 
-        return $this->extractJsonArray($response);
+        // สร้าง State signature เพื่อแยกความแตกต่างของ Context, Flow, Params และ Auth state อย่างละเอียดอ่อน
+        $stateSignature = md5(json_encode([
+            'flow'    => $this->activeFlow->value,
+            'scope'   => $this->activeScope,
+            'headers' => $this->extraHeaders,
+            'auth'    => $this->attachToken,
+            'suffix'  => $this->cacheSuffix,
+            'params'  => $safeParams,
+        ]));
+
+        return "{$baseIdentifier}:{$stateSignature}";
     }
 
-    /**
-     * คืนค่า OAuth2 access token (ดึงจาก cache หรือขอใหม่)
-     */
-    public function getAccessToken(string $scope = ''): string
-    {
-        return $this->resolveToken(
-            self::FLOW_OAUTH_ENDPOINT,
-            self::FLOW_OAUTH_GRANT,
-            self::FLOW_OAUTH_PREFIX,
-            $scope,
-        );
-    }
-
-    /**
-     * คืนค่า JWT access token (ดึงจาก cache หรือขอใหม่)
-     */
-    public function getAccessTokenJwt(string $scope = ''): string
-    {
-        return $this->resolveToken(
-            self::FLOW_JWT_ENDPOINT,
-            self::FLOW_JWT_GRANT,
-            self::FLOW_JWT_PREFIX,
-            $scope,
-        );
-    }
-
-    /**
-     * ล้าง OAuth2 access token ออกจาก cache
-     */
-    public function clearToken(string $scope = ''): void
-    {
-        $this->cache()->forget($this->cacheKey(self::FLOW_OAUTH_PREFIX, $scope));
-    }
-
-    /**
-     * ล้าง JWT access token ออกจาก cache
-     */
-    public function clearTokenJwt(string $scope = ''): void
-    {
-        $this->cache()->forget($this->cacheKey(self::FLOW_JWT_PREFIX, $scope));
-    }
-
-    /**
-     * ส่ง request ผ่าน HTTP client หลัก แล้วคืนผลในรูป JSON array
-     *
-     * @param  callable(PendingRequest): Response  $callback
-     * @return array<string, mixed>
-     */
-    private function dispatchJson(string $method, string $endpoint, callable $callback): array
-    {
-        $response = $this->withTokenRetry(
-            fn(): Response => $callback($this->client()),
-        );
-
-        if ($response->failed()) {
-            throw new \RuntimeException(
-                "{$method} {$endpoint} failed [{$response->status()}]: {$response->body()}",
-            );
-        }
-
-        return $this->extractJsonArray($response);
-    }
-
-    /**
-     * ดึง JSON body จาก Response แล้วคืนเป็น array (กันกรณี response ไม่ใช่ object/array)
-     *
-     * @return array<string, mixed>
-     */
     private function extractJsonArray(Response $response): array
     {
         $data = $response->json();
@@ -281,162 +506,45 @@ final class MasterClientService implements MasterClientInterface
         return \is_array($data) ? $data : [];
     }
 
-    /**
-     * เรียก request — หาก response = 401 ให้ทิ้ง token เก่าแล้วลองใหม่หนึ่งครั้ง
-     *
-     * @param  callable(): Response  $request
-     */
     private function withTokenRetry(callable $request): Response
     {
         $response = $request();
 
-        if ($response->status() === 401) {
-            $this->clearToken();
+        // อนุญาตให้ทำ Retry อัตโนมัติเฉพาะเคสที่ปล่อยให้ Manager จัดการ Token เองเท่านั้น
+        // (หากเป็น Token ที่ยัดมาเองด้วยมือ เราไม่สามารถสั่ง Refresh ได้)
+        $isAutoManaged = $this->attachToken && $this->explicitToken === null;
+
+        if ($isAutoManaged && $response->status() === 401) {
+            $this->tokenManager->clear($this->activeFlow, $this->activeScope);
             $response = $request();
         }
 
         return $response;
     }
 
-    /**
-     * สร้าง HTTP client หลัก (แนบ OAuth2 token + retry policy)
-     */
     private function client(): PendingRequest
     {
-        return Http::baseUrl($this->masterUrl)
-            ->withToken($this->getAccessToken())
+        $client = Http::baseUrl($this->masterUrl)
+            ->timeout($this->timeout)
+            ->retry($this->retryTimes, $this->retryDelay, function (\Throwable $e): bool {
+                return $e instanceof \Illuminate\Http\Client\RequestException
+                    && $e->response->serverError();
+            })
             ->acceptJson()
-            ->timeout(self::HTTP_TIMEOUT)
-            ->retry(self::HTTP_RETRY_TIMES, self::HTTP_RETRY_SLEEP_MS);
-    }
-
-    /**
-     * คืน token จาก cache หรือเรียก fetchAndCacheToken() ถ้าไม่มี
-     */
-    private function resolveToken(
-        string $endpoint,
-        string $grantType,
-        string $cachePrefix,
-        string $scope,
-    ): string {
-        $cached = $this->cache()->get($this->cacheKey($cachePrefix, $scope));
-
-        if (\is_string($cached) && $cached !== '') {
-            return $cached;
-        }
-
-        return $this->fetchAndCacheToken($endpoint, $grantType, $cachePrefix, $scope);
-    }
-
-    /**
-     * ขอ access token ใหม่จาก Master ตาม flow ที่ระบุ พร้อม cache ผลลัพธ์
-     */
-    private function fetchAndCacheToken(
-        string $endpoint,
-        string $grantType,
-        string $cachePrefix,
-        string $scope,
-    ): string {
-        $sodium = $this->sodiumHelper();
-
-        $payload = [
-            'grant_type'    => $grantType,
-            'client_id'     => $this->clientId,
-            'client_secret' => $this->clientSecret,
-            'scope'         => $scope,
-        ];
-
-        $headers = [
-            'X-Timestamp' => now()->toIso8601String(),
-            'X-Client-ID' => $this->clientId,
-        ];
-
-        $signatureSeed    = $this->configString('slave::client.signature_seed');
-        $publicBox        = $this->configString('slave::client.public_box');
-        $signatureKeyPair = $sodium->generateSignatureKeyPair($signatureSeed);
-
-        $privateSignKey = $signatureKeyPair['secret'] ?? '';
-        if ($privateSignKey === '') {
-            throw new \RuntimeException('Invalid signature keypair: missing secret.');
-        }
-
-        $encryptedPayload       = $sodium->hybridEncrypt($payload, $publicBox);
-        $headers['X-Signature'] = $sodium->sign([...$payload, ...$headers], $privateSignKey);
-
-        \sodium_memzero($privateSignKey);
-
-        try {
-            $response = Http::asForm()
-                ->withHeaders($headers)
-                ->post(
-                    "{$this->masterUrl}{$endpoint}",
-                    ['encrypted_payload' => $encryptedPayload],
-                );
-        } catch (\Throwable $e) {
-            Log::critical('Master Connection Error', ['error' => $e->getMessage()]);
-            throw $e;
-        }
-        //     dd($response->body());
-
-        if ($response->failed()) {
-            Log::error('Master Auth Failed', [
-                'flow'   => $cachePrefix,
-                'status' => $response->status(),
-                'body'   => $response->body(),
+            ->withHeaders([
+                'X-Platform'   => 'erped-frontend',
+                'Accept'       => 'application/json',
+                'Content-Type' => 'application/json',
             ]);
-            throw new \RuntimeException('Could not authenticate with Master Server.');
+
+        if ($this->attachToken) {
+            // ลำดับความสำคัญ: 1. Token ที่ป้อนมาตรงๆ (Explicit) 2. Token ที่ดึงจาก TokenManager
+            $token = $this->explicitToken ?? $this->tokenManager->getToken($this->activeFlow, $this->activeScope);
+            $client->withToken($token);
         }
 
-        $data = $response->json();
-        if (! \is_array($data)) {
-            throw new \RuntimeException('Master Server returned invalid JSON response.');
-        }
-        //fix response jwt grant
-        if ($grantType === self::FLOW_JWT_GRANT) {
-            $data = $data['data'];
-        }
-        //     dd($data);
-
-        $accessToken = $data['access_token'] ?? null;
-        if (! \is_string($accessToken) || $accessToken === '') {
-            throw new \RuntimeException('Master Server response missing access_token.');
-        }
-
-        $rawExpires = $data['expires_in'] ?? self::DEFAULT_EXPIRES_IN;
-        $expiresIn  = \is_int($rawExpires) ? $rawExpires : self::DEFAULT_EXPIRES_IN;
-        $cacheTtl   = max(self::MIN_CACHE_TTL, $expiresIn - self::CACHE_TTL_BUFFER);
-
-        $this->cache()->put(
-            $this->cacheKey($cachePrefix, $scope),
-            $accessToken,
-            $cacheTtl,
-        );
-
-        return $accessToken;
-    }
-
-    private function cacheKey(string $prefix, string $scope): string
-    {
-        return "{$prefix}:{$this->clientId}:" . md5($scope);
-    }
-
-    private function cache(): CacheRepository
-    {
-        return Cache::store();
-    }
-
-    private function configString(string $key): string
-    {
-        $value = config($key, '');
-
-        return \is_string($value) ? $value : '';
-    }
-
-    private function sodiumHelper(): SodiumHelper
-    {
-        /** @var SodiumHelper $helper */
-        $helper = app('core.crypto.sodium');
-
-        return $helper;
+        return $this->extraHeaders !== []
+            ? $client->withHeaders($this->extraHeaders)
+            : $client;
     }
 }

@@ -9,7 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->string('backend_user_id')->nullable()->unique()->after('id');
+            $table->uuid('backend_user_id')->nullable()->unique()->after('id')->comment('user backend');
+            //     $table->string('backend_user_id')->nullable()->unique()->after('id');
         });
     }
 

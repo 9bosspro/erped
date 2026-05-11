@@ -1,12 +1,12 @@
 <?php
 
-use App\Http\Controllers\Api\BackendProxyController;
+use Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController;
 use App\Http\Middleware\RefreshBackendToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/user', fn (Request $request) => $request->user());
+    Route::get('/user', fn(Request $request) => $request->user());
 });
 
 // BFF Proxy — เรียก Backend API ผ่าน server-side (token อยู่ใน session)

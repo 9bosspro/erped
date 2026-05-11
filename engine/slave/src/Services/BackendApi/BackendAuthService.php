@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\BackendApi;
+namespace Slave\Services\BackendApi;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;

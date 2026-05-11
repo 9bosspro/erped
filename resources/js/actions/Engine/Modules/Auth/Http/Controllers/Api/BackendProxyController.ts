@@ -1,7 +1,7 @@
-import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../../../../wayfinder'
+import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../../../../../../wayfinder'
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::get
- * @see app/Http/Controllers/Api/BackendProxyController.php:36
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::get
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:38
  * @route '/api/v1/proxy/{endpoint}'
  */
 export const get = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -15,8 +15,8 @@ get.definition = {
 } satisfies RouteDefinition<["get","head"]>
 
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::get
- * @see app/Http/Controllers/Api/BackendProxyController.php:36
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::get
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:38
  * @route '/api/v1/proxy/{endpoint}'
  */
 get.url = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions) => {
@@ -43,8 +43,8 @@ get.url = (args: { endpoint: string | number } | [endpoint: string | number ] | 
 }
 
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::get
- * @see app/Http/Controllers/Api/BackendProxyController.php:36
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::get
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:38
  * @route '/api/v1/proxy/{endpoint}'
  */
 get.get = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -52,8 +52,8 @@ get.get = (args: { endpoint: string | number } | [endpoint: string | number ] | 
     method: 'get',
 })
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::get
- * @see app/Http/Controllers/Api/BackendProxyController.php:36
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::get
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:38
  * @route '/api/v1/proxy/{endpoint}'
  */
 get.head = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -62,8 +62,8 @@ get.head = (args: { endpoint: string | number } | [endpoint: string | number ] |
 })
 
     /**
-* @see \App\Http\Controllers\Api\BackendProxyController::get
- * @see app/Http/Controllers/Api/BackendProxyController.php:36
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::get
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:38
  * @route '/api/v1/proxy/{endpoint}'
  */
     const getForm = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -72,8 +72,8 @@ get.head = (args: { endpoint: string | number } | [endpoint: string | number ] |
     })
 
             /**
-* @see \App\Http\Controllers\Api\BackendProxyController::get
- * @see app/Http/Controllers/Api/BackendProxyController.php:36
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::get
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:38
  * @route '/api/v1/proxy/{endpoint}'
  */
         getForm.get = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -81,8 +81,8 @@ get.head = (args: { endpoint: string | number } | [endpoint: string | number ] |
             method: 'get',
         })
             /**
-* @see \App\Http\Controllers\Api\BackendProxyController::get
- * @see app/Http/Controllers/Api/BackendProxyController.php:36
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::get
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:38
  * @route '/api/v1/proxy/{endpoint}'
  */
         getForm.head = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -97,8 +97,8 @@ get.head = (args: { endpoint: string | number } | [endpoint: string | number ] |
     
     get.form = getForm
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::post
- * @see app/Http/Controllers/Api/BackendProxyController.php:54
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::post
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:56
  * @route '/api/v1/proxy/{endpoint}'
  */
 export const post = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'post'> => ({
@@ -112,8 +112,8 @@ post.definition = {
 } satisfies RouteDefinition<["post"]>
 
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::post
- * @see app/Http/Controllers/Api/BackendProxyController.php:54
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::post
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:56
  * @route '/api/v1/proxy/{endpoint}'
  */
 post.url = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions) => {
@@ -140,8 +140,8 @@ post.url = (args: { endpoint: string | number } | [endpoint: string | number ] |
 }
 
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::post
- * @see app/Http/Controllers/Api/BackendProxyController.php:54
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::post
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:56
  * @route '/api/v1/proxy/{endpoint}'
  */
 post.post = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'post'> => ({
@@ -150,8 +150,8 @@ post.post = (args: { endpoint: string | number } | [endpoint: string | number ] 
 })
 
     /**
-* @see \App\Http\Controllers\Api\BackendProxyController::post
- * @see app/Http/Controllers/Api/BackendProxyController.php:54
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::post
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:56
  * @route '/api/v1/proxy/{endpoint}'
  */
     const postForm = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -160,8 +160,8 @@ post.post = (args: { endpoint: string | number } | [endpoint: string | number ] 
     })
 
             /**
-* @see \App\Http\Controllers\Api\BackendProxyController::post
- * @see app/Http/Controllers/Api/BackendProxyController.php:54
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::post
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:56
  * @route '/api/v1/proxy/{endpoint}'
  */
         postForm.post = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -171,8 +171,8 @@ post.post = (args: { endpoint: string | number } | [endpoint: string | number ] 
     
     post.form = postForm
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::put
- * @see app/Http/Controllers/Api/BackendProxyController.php:72
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::put
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:74
  * @route '/api/v1/proxy/{endpoint}'
  */
 export const put = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'put'> => ({
@@ -186,8 +186,8 @@ put.definition = {
 } satisfies RouteDefinition<["put"]>
 
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::put
- * @see app/Http/Controllers/Api/BackendProxyController.php:72
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::put
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:74
  * @route '/api/v1/proxy/{endpoint}'
  */
 put.url = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions) => {
@@ -214,8 +214,8 @@ put.url = (args: { endpoint: string | number } | [endpoint: string | number ] | 
 }
 
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::put
- * @see app/Http/Controllers/Api/BackendProxyController.php:72
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::put
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:74
  * @route '/api/v1/proxy/{endpoint}'
  */
 put.put = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'put'> => ({
@@ -224,8 +224,8 @@ put.put = (args: { endpoint: string | number } | [endpoint: string | number ] | 
 })
 
     /**
-* @see \App\Http\Controllers\Api\BackendProxyController::put
- * @see app/Http/Controllers/Api/BackendProxyController.php:72
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::put
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:74
  * @route '/api/v1/proxy/{endpoint}'
  */
     const putForm = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -239,8 +239,8 @@ put.put = (args: { endpoint: string | number } | [endpoint: string | number ] | 
     })
 
             /**
-* @see \App\Http\Controllers\Api\BackendProxyController::put
- * @see app/Http/Controllers/Api/BackendProxyController.php:72
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::put
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:74
  * @route '/api/v1/proxy/{endpoint}'
  */
         putForm.put = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -255,8 +255,8 @@ put.put = (args: { endpoint: string | number } | [endpoint: string | number ] | 
     
     put.form = putForm
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::deleteMethod
- * @see app/Http/Controllers/Api/BackendProxyController.php:90
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::deleteMethod
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:92
  * @route '/api/v1/proxy/{endpoint}'
  */
 export const deleteMethod = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
@@ -270,8 +270,8 @@ deleteMethod.definition = {
 } satisfies RouteDefinition<["delete"]>
 
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::deleteMethod
- * @see app/Http/Controllers/Api/BackendProxyController.php:90
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::deleteMethod
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:92
  * @route '/api/v1/proxy/{endpoint}'
  */
 deleteMethod.url = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions) => {
@@ -298,8 +298,8 @@ deleteMethod.url = (args: { endpoint: string | number } | [endpoint: string | nu
 }
 
 /**
-* @see \App\Http\Controllers\Api\BackendProxyController::deleteMethod
- * @see app/Http/Controllers/Api/BackendProxyController.php:90
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::deleteMethod
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:92
  * @route '/api/v1/proxy/{endpoint}'
  */
 deleteMethod.delete = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'delete'> => ({
@@ -308,8 +308,8 @@ deleteMethod.delete = (args: { endpoint: string | number } | [endpoint: string |
 })
 
     /**
-* @see \App\Http\Controllers\Api\BackendProxyController::deleteMethod
- * @see app/Http/Controllers/Api/BackendProxyController.php:90
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::deleteMethod
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:92
  * @route '/api/v1/proxy/{endpoint}'
  */
     const deleteMethodForm = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -323,8 +323,8 @@ deleteMethod.delete = (args: { endpoint: string | number } | [endpoint: string |
     })
 
             /**
-* @see \App\Http\Controllers\Api\BackendProxyController::deleteMethod
- * @see app/Http/Controllers/Api/BackendProxyController.php:90
+* @see \Engine\Modules\Auth\Http\Controllers\Api\BackendProxyController::deleteMethod
+ * @see engine/modules/Auth/app/Http/Controllers/Api/BackendProxyController.php:92
  * @route '/api/v1/proxy/{endpoint}'
  */
         deleteMethodForm.delete = (args: { endpoint: string | number } | [endpoint: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({

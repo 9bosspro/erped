@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Str;
+
 /*
 |--------------------------------------------------------------------------
 | AppHelper — ฟังก์ชัน helper สำหรับ paths, config, และ app-level utilities
@@ -144,6 +146,23 @@ if (! function_exists('isPathSafe')) {
     }
 }
 
+if (! function_exists('get_app_key')) {
+    /**
+     * คืนค่า APP_KEY จาก config/app.php
+     *
+     * @return string APP_KEY
+     */
+    function get_app_key(): string
+    {
+        $appKey = config('app.key', '');
+        $appKeyStr = is_scalar($appKey) ? (string) $appKey : '';
+
+        return Str::startsWith($appKeyStr, 'base64:')
+            ? base64_decode(substr($appKeyStr, 7)) ?: null
+            : ($appKeyStr ?: null);
+    }
+}
+
 if (! function_exists('istheme_paths')) {
     /**
      * ตรวจสอบว่า theme directory มีอยู่จริงหรือไม่
@@ -222,6 +241,35 @@ if (! function_exists('canonicalize')) {
         }
 
         return is_array($data) ? $data : (is_scalar($data) ? (string) $data : '');
+    }
+}
+
+if (! function_exists('deserializeData')) {
+    /**
+     * Normalize mixed data to string
+     *
+     * @param  mixed  $data  Data to normalize
+     * @return string Normalized string
+     */
+    function deserializeData(string $data): mixed
+    {
+        try {
+            $decoded = json_decode($data, true, 100, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            \sodium_memzero($data);
+
+            return $data;
+        }
+
+        if (\is_array($decoded)) {
+            \sodium_memzero($data);
+
+            return $decoded;
+        }
+
+        \sodium_memzero($data);
+
+        return $data;
     }
 }
 

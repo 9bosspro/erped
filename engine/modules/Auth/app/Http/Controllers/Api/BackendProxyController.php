@@ -2,14 +2,16 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Api;
+namespace Engine\Modules\Auth\Http\Controllers\Api;
 
-use App\Services\BackendApi\BackendApiClient;
-use App\Services\BackendApi\TokenManager;
+use App\Http\Controllers\Controller;
+use Closure;
 use Illuminate\Http\Client\Response as BackendResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Slave\Services\BackendApi\BackendApiClient;
+use Slave\Services\BackendApi\TokenManager;
 
 /**
  * BackendProxyController — BFF Proxy สำหรับเรียก Backend API
@@ -23,11 +25,11 @@ use Illuminate\Support\Facades\Log;
  *  - Token missing → 401 ทันที
  *  - Backend 5xx → 503 พร้อม generic message
  */
-class BackendProxyController extends BaseApiController
+class BackendProxyController extends Controller
 {
     public function __construct(
         private readonly BackendApiClient $apiClient,
-        private readonly TokenManager    $tokenManager,
+        private readonly TokenManager $tokenManager,
     ) {}
 
     /**
@@ -40,7 +42,7 @@ class BackendProxyController extends BaseApiController
         }
 
         return $this->withToken(function (string $token) use ($request, $endpoint): JsonResponse {
-            $start    = microtime(true);
+            $start = microtime(true);
             $response = $this->apiClient->get($token, "/api/v1/{$endpoint}", $request->query());
             $this->logProxyCall($request, 'GET', $endpoint, $response->status(), $start);
 
@@ -58,7 +60,7 @@ class BackendProxyController extends BaseApiController
         }
 
         return $this->withToken(function (string $token) use ($request, $endpoint): JsonResponse {
-            $start    = microtime(true);
+            $start = microtime(true);
             $response = $this->apiClient->post($token, "/api/v1/{$endpoint}", $request->all());
             $this->logProxyCall($request, 'POST', $endpoint, $response->status(), $start);
 
@@ -76,7 +78,7 @@ class BackendProxyController extends BaseApiController
         }
 
         return $this->withToken(function (string $token) use ($request, $endpoint): JsonResponse {
-            $start    = microtime(true);
+            $start = microtime(true);
             $response = $this->apiClient->put($token, "/api/v1/{$endpoint}", $request->all());
             $this->logProxyCall($request, 'PUT', $endpoint, $response->status(), $start);
 
@@ -94,7 +96,7 @@ class BackendProxyController extends BaseApiController
         }
 
         return $this->withToken(function (string $token) use ($request, $endpoint): JsonResponse {
-            $start    = microtime(true);
+            $start = microtime(true);
             $response = $this->apiClient->delete($token, "/api/v1/{$endpoint}", $request->all());
             $this->logProxyCall($request, 'DELETE', $endpoint, $response->status(), $start);
 
@@ -130,7 +132,7 @@ class BackendProxyController extends BaseApiController
         $allowed = config('backend.proxy_allowed_endpoints', []);
 
         foreach ($allowed as $prefix) {
-            if ($endpoint === $prefix || str_starts_with($endpoint, $prefix . '/')) {
+            if ($endpoint === $prefix || str_starts_with($endpoint, $prefix.'/')) {
                 return true;
             }
         }
@@ -141,9 +143,9 @@ class BackendProxyController extends BaseApiController
     /**
      * ตรวจสอบ token และส่งต่อ action หากมี — ส่ง 401 ทันทีหากไม่มี token
      *
-     * @param \Closure(string): JsonResponse $action
+     * @param  Closure(string): JsonResponse  $action
      */
-    private function withToken(\Closure $action): JsonResponse
+    private function withToken(Closure $action): JsonResponse
     {
         $token = $this->tokenManager->getToken();
 
@@ -170,7 +172,7 @@ class BackendProxyController extends BaseApiController
         if ($backendResponse->serverError()) {
             Log::error('Backend API server error via proxy', [
                 'endpoint' => $endpoint,
-                'status'   => $backendResponse->status(),
+                'status' => $backendResponse->status(),
             ]);
 
             return response()->json([
@@ -195,12 +197,12 @@ class BackendProxyController extends BaseApiController
     private function logProxyCall(Request $request, string $method, string $endpoint, int $status, float $start): void
     {
         Log::channel('daily')->info('BFF Proxy call', [
-            'method'      => $method,
-            'endpoint'    => $endpoint,
-            'status'      => $status,
+            'method' => $method,
+            'endpoint' => $endpoint,
+            'status' => $status,
             'duration_ms' => round((microtime(true) - $start) * 1000, 2),
-            'user_id'     => $request->user()?->id,
-            'ip'          => $request->ip(),
+            'user_id' => $request->user()?->id,
+            'ip' => $request->ip(),
         ]);
     }
 }

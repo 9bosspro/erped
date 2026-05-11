@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition } from './../../../../../../wayfinder'
 /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::index
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:29
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:32
  * @route '/demos/lab'
  */
 export const index = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -16,7 +16,7 @@ index.definition = {
 
 /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::index
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:29
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:32
  * @route '/demos/lab'
  */
 index.url = (options?: RouteQueryOptions) => {
@@ -25,7 +25,7 @@ index.url = (options?: RouteQueryOptions) => {
 
 /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::index
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:29
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:32
  * @route '/demos/lab'
  */
 index.get = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -34,7 +34,7 @@ index.get = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
 })
 /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::index
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:29
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:32
  * @route '/demos/lab'
  */
 index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -44,7 +44,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
 
     /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::index
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:29
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:32
  * @route '/demos/lab'
  */
     const indexForm = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -54,7 +54,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
 
             /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::index
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:29
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:32
  * @route '/demos/lab'
  */
         indexForm.get = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -63,7 +63,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
         })
             /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::index
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:29
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:32
  * @route '/demos/lab'
  */
         indexForm.head = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -79,7 +79,7 @@ index.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
     index.form = indexForm
 /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::lab1
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:40
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:43
  * @route '/demos/lab/lab1'
  */
 export const lab1 = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -94,7 +94,7 @@ lab1.definition = {
 
 /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::lab1
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:40
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:43
  * @route '/demos/lab/lab1'
  */
 lab1.url = (options?: RouteQueryOptions) => {
@@ -103,7 +103,7 @@ lab1.url = (options?: RouteQueryOptions) => {
 
 /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::lab1
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:40
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:43
  * @route '/demos/lab/lab1'
  */
 lab1.get = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -112,7 +112,7 @@ lab1.get = (options?: RouteQueryOptions): RouteDefinition<'get'> => ({
 })
 /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::lab1
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:40
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:43
  * @route '/demos/lab/lab1'
  */
 lab1.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -122,7 +122,7 @@ lab1.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
 
     /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::lab1
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:40
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:43
  * @route '/demos/lab/lab1'
  */
     const lab1Form = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -132,7 +132,7 @@ lab1.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
 
             /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::lab1
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:40
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:43
  * @route '/demos/lab/lab1'
  */
         lab1Form.get = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -141,7 +141,7 @@ lab1.head = (options?: RouteQueryOptions): RouteDefinition<'head'> => ({
         })
             /**
 * @see \Engine\Modules\Demo\Http\Controllers\LabController::lab1
- * @see engine/modules/Demo/app/Http/Controllers/LabController.php:40
+ * @see engine/modules/Demo/app/Http/Controllers/LabController.php:43
  * @route '/demos/lab/lab1'
  */
         lab1Form.head = (options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({

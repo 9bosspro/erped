@@ -13,7 +13,7 @@ use JsonSerializable;
  * ช่วยแก้ปัญหา "Undefined index" หรือ "Unexpected array shape"
  * และรักษามาตรฐานของผลลัพธ์ (Response) ให้เหมือนกันทั่วทั้งโปรเจ็กต์
  *
- * @template T
+ * @template-covariant T
  */
 class ServiceResult implements Arrayable, JsonSerializable
 {

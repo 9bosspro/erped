@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Auth;
+namespace Engine\Modules\Auth\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Services\BackendApi\BackendAuthService;
+use Slave\Services\BackendApi\BackendAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -65,6 +65,7 @@ class BackendLoginController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        // dd('dsfsd');
         $this->authService->logout();
 
         return redirect('/');

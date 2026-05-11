@@ -4,14 +4,22 @@ declare(strict_types=1);
 
 namespace Slave\Providers;
 
+use Core\Base\Support\Helpers\Crypto\SodiumHelper;
 use Core\Base\Traits\LoadAndPublishDataTrait;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 use Slave\Contracts\Master\MasterClientInterface;
 use Slave\Http\Middleware\ForceTheme;
-//use Slave\Http\Middleware\SecurityHeaders;
+// use Slave\Http\Middleware\SecurityHeaders;
+use Slave\Services\BackendApi\BackendApiClient;
 use Slave\Services\Master\MasterClientService;
+use App\Repositories\Contracts\UserRepositoryInterface;
+use App\Repositories\Eloquent\UserRepository;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Support\Facades\Event;
+use Slave\Listeners\ClearMasterTokensOnLogout;
+
 
 /**
  * SlaveServiceProvider — bootstrap สำหรับ EvoEngine Slave Client
@@ -30,6 +38,8 @@ class SlaveServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->setNamespace('Slave');
+        $this->app->bind(UserRepositoryInterface::class, UserRepository::class);
+        $this->app->singleton(BackendApiClient::class);
         $this->registerMasterClient();
     }
 
@@ -44,6 +54,18 @@ class SlaveServiceProvider extends ServiceProvider
         $this->loadRoutes(['api']);
         //  $this->registerMiddlewareAliases();
         $this->registerBladeDirectives();
+        $this->registerEventListeners();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function provides(): array
+    {
+        return [
+            MasterClientInterface::class,
+            'slave.master',
+        ];
     }
 
     /**
@@ -66,14 +88,36 @@ class SlaveServiceProvider extends ServiceProvider
             /** @var \Illuminate\Contracts\Config\Repository $config */
             $config = $app['config'];
 
-            $masterUrl    = $config->get('slave::client.master_url', '');
-            $clientId     = $config->get('slave::client.client_id', '');
+            $masterUrl = $config->get('slave::client.master_url', '');
+            $clientId = $config->get('slave::client.client_id', '');
             $clientSecret = $config->get('slave::client.client_secret', '');
+            $defaultScope = $config->get('slave::client.default_scope', '');
 
+            $masterUrl = \is_string($masterUrl) ? $masterUrl : '';
+            $clientId = \is_string($clientId) ? $clientId : '';
+            $clientSecret = \is_string($clientSecret) ? $clientSecret : '';
+
+            /** @var SodiumHelper $sodium */
+            $sodium = $app->make('core.crypto.sodium');
+
+            // 1. สร้าง TokenManager เพื่อจัดการเรื่องความปลอดภัยและ Token Lifecycle
+            $tokenManager = new \Slave\Services\Master\TokenManager(
+                masterUrl: $masterUrl,
+                clientId: $clientId,
+                clientSecret: $clientSecret,
+                sodium: $sodium,
+                signatureSeed: (string) $config->get('slave::client.signature_seed', ''),
+                publicBox: (string) $config->get('slave::client.public_box', ''),
+                tokenStoreName: $config->get('slave::client.token_store'), // 💡 ดึงค่าเริ่มต้นจาก config อัตโนมัติ
+            );
+
+            // 2. ส่งเข้า MasterClientService (Dependency Injection)
             return new MasterClientService(
-                masterUrl: \is_string($masterUrl) ? $masterUrl : '',
-                clientId: \is_string($clientId) ? $clientId : '',
-                clientSecret: \is_string($clientSecret) ? $clientSecret : '',
+                masterUrl: $masterUrl,
+                clientId: $clientId,
+                clientSecret: $clientSecret,
+                tokenManager: $tokenManager,
+                defaultScope: \is_string($defaultScope) ? $defaultScope : '',
             );
         });
 
@@ -92,13 +136,14 @@ class SlaveServiceProvider extends ServiceProvider
     }
 
     /**
-     * @return list<string>
+     * ลงทะเบียน Event Listeners ของ Slave Package
      */
-    public function provides(): array
+    private function registerEventListeners(): void
     {
-        return [
-            MasterClientInterface::class,
-            'slave.master',
-        ];
+        // 🚨 ดักจับเหตุการณ์ Logout และสั่งล้าง Master Tokens ทันที
+        Event::listen(
+            Logout::class,
+            ClearMasterTokensOnLogout::class
+        );
     }
 }

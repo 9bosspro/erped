@@ -2,9 +2,9 @@
 
 namespace App\Providers;
 
-use App\Repositories\Contracts\UserRepositoryInterface;
-use App\Repositories\Eloquent\UserRepository;
-use App\Services\BackendApi\BackendApiClient;
+//use App\Repositories\Contracts\UserRepositoryInterface;
+//use App\Repositories\Eloquent\UserRepository;
+//use App\Services\BackendApi\BackendApiClient;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,8 +17,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         //  $this->app->register(BaseServiceProvider::class);
-        $this->app->bind(UserRepositoryInterface::class, UserRepository::class);
-        $this->app->singleton(BackendApiClient::class);
+        //  $this->app->bind(UserRepositoryInterface::class, UserRepository::class);
+        // $this->app->singleton(BackendApiClient::class);
     }
 
     public function boot(): void

@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Throwable;
+use Illuminate\Http\Client\RequestException;
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Slave Client Helpers
 //  ฟังก์ชันสะดวกสำหรับเข้าถึงค่าคอนฟิกของ Slave Client
@@ -86,5 +92,38 @@ if (! function_exists('slave_verify_webhook_signature')) {
         $expected = hash_hmac($algo, $payload, $secret);
 
         return hash_equals($expected, $signature);
+    }
+}
+
+
+if (! function_exists('resetpassword')) {
+    /**
+     * ตรวจสอบ HMAC signature ของ webhook ที่มาจาก Master
+     *
+     * @param  string  $payload   raw request body
+     * @param  string  $signature signature จาก X-Slave-Signature header
+     */
+    function callRestApiHybrid(array $payload, string $path, string $method): array
+    {
+        $masterClient = app('slave.master');
+        $headers                = $masterClient->generateSignedHeaders($payload);
+        $headers['X-For-slave'] = 'true';
+        $encryptedPayload       = $masterClient->encryptedpayload($payload);
+
+        try {
+            $response = $masterClient->withHeaders($headers)
+                ->sendRequest($method, $path, [
+                    'encrypted_payload' => $encryptedPayload,
+                ]);
+
+            return $response->json() ?? ['raw_body' => $response->body()];
+        } catch (RequestException $e) {
+            Log::critical('Master Server API Unreachable', ['error' => $e->getMessage()]);
+            return [
+                'error'  => true,
+                'status' => $e->response?->status(),
+                'body'   => $e->response?->body(),
+            ];
+        }
     }
 }

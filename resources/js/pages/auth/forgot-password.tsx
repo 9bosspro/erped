@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/auth-layout';
 
 export default function ForgotPassword({ status }: { status?: string }) {
-    const { post, processing, errors } = useForm({ email: '' });
+    const { data, setData, post, processing, errors } = useForm({ email: '' });
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,6 +39,8 @@ export default function ForgotPassword({ status }: { status?: string }) {
                             id="email"
                             type="email"
                             name="email"
+                            value={data.email}
+                            onChange={(e) => setData('email', e.target.value)}
                             autoComplete="off"
                             autoFocus
                             placeholder="email@example.com"

@@ -4,34 +4,44 @@ declare(strict_types=1);
 
 namespace Slave\Services\Master;
 
-use Carbon\Carbon;
 use Core\Base\Support\Helpers\Crypto\SodiumHelper;
-use Illuminate\Contracts\Cache\Repository as CacheRepository;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Slave\Contracts\Master\TokenFlow;
+use Slave\Contracts\Master\TokenStorageInterface;
+use Slave\Services\Master\Storage\CacheTokenStorage;
+use Slave\Services\Master\Storage\SessionTokenStorage;
+use Slave\Traits\TokenExpiryTrait;
 use Throwable;
 
 /**
  * TokenManager — รับผิดชอบการจัดการ Token lifecycle กับ Master Server
  *
- * ทำหน้าที่:
- *  - ขอ access token ใหม่ผ่าน Sodium Cryptography Signature
- *  - จัดเก็บ cache และดึงข้อมูล tokens
- *  - เคลียร์ invalid tokens เมื่อได้รับแจ้ง
+ * ทำหน้าที่เป็น orchestrator เท่านั้น:
+ *  - ดึง / บันทึก / ล้าง token ผ่าน TokenStorageInterface
+ *  - ขอ token ใหม่จาก Master ด้วย Sodium Signature
+ *  - ตรวจสอบวันหมดอายุผ่าน TokenExpiryTrait
+ *
+ * Storage ถูก resolve แบบ lazy ผ่าน storage() — สลับ driver ได้ด้วย withTokenStore()
  */
 class TokenManager
 {
-    /** TTL ขั้นต่ำของ cache token (วินาที) */
+    use TokenExpiryTrait;
+
     private const int MIN_CACHE_TTL = 300;
 
-    /** Buffer ที่ตัดออกจาก expires_in ก่อนใช้เป็น TTL (วินาที) */
     private const int CACHE_TTL_BUFFER = 300;
 
-    /** Default expires_in หาก Master ไม่ส่งกลับมา (12 ชั่วโมง) */
-    private const int DEFAULT_EXPIRES_IN = 43200;
+    private const int DEFAULT_EXPIRES = 43200;  // 12 ชั่วโมง
+
+    private const int MANIFEST_TTL = 2592000; // 30 วัน
+
+    private ?string $username = null;
+
+    private ?string $password = null;
+
+    private ?array $bodytoken = null;
 
     public function __construct(
         private readonly string $masterUrl,
@@ -40,15 +50,12 @@ class TokenManager
         private readonly SodiumHelper $sodium,
         private readonly string $signatureSeed,
         private readonly string $publicBox,
-        /** ชื่อช่องทางสำหรับเก็บ Access Token Cache (เช่น 'redis', 'session', 'file') - null คือ default */
         private ?string $tokenStoreName = null,
-        /** Suffix พิเศษสำหรับต่อท้าย Cache Key เพื่อแยก Context ป้องกันข้อมูลชนกัน (เช่น User ID, Session ID) */
         private string $cacheSuffix = '',
     ) {}
 
-    /**
-     * คืน instance ใหม่ที่มีการต่อท้าย Cache Key ป้องกันข้อมูลทับซ้อน
-     */
+    // ─── Fluent Builders (Immutable Clone Pattern) ────────────────────────────
+
     public function withCacheSuffix(string $suffix): static
     {
         $clone = clone $this;
@@ -57,9 +64,6 @@ class TokenManager
         return $clone;
     }
 
-    /**
-     * คืน instance ใหม่ที่เปลี่ยน Driver/Store ในการแคช Token
-     */
     public function withTokenStore(?string $storeName): static
     {
         $clone = clone $this;
@@ -68,9 +72,14 @@ class TokenManager
         return $clone;
     }
 
-    /**
-     * คืน instance ใหม่ที่เปลี่ยน credentials (ใช้รองรับ Fluent Pattern ใน Client)
-     */
+    public function withBody(?array $bodytoken = null): static
+    {
+        $clone = clone $this;
+        $clone->bodytoken = $bodytoken;
+
+        return $clone;
+    }
+
     public function withCredentials(string $clientId, string $clientSecret): static
     {
         $clone = clone $this;
@@ -80,20 +89,25 @@ class TokenManager
         return $clone;
     }
 
-    /**
-     * คืน access token ตาม flow ที่กำหนด (รองรับ auto-refresh หากหมดอายุ)
-     */
+    public function withUserPassword(string $username, string $password): static
+    {
+        $clone = clone $this;
+        $clone->username = $username;
+        $clone->password = $password;
+
+        return $clone;
+    }
+
+    // ─── Token Access ─────────────────────────────────────────────────────────
+
     public function getToken(TokenFlow $flow, string $scope): string
     {
-        $cacheKey = $this->cacheKey($flow->cachePrefix(), $scope);
-        $cached   = $this->getFromStorage($cacheKey);
+        $cached = $this->getFromStorage($this->cacheKey($flow, $scope));
 
-        // 🌟 รองรับ Rich Array Payload
         if (\is_array($cached) && isset($cached['access_token'])) {
             return (string) $cached['access_token'];
         }
 
-        // Fallback Legacy Support
         if (\is_string($cached) && $cached !== '') {
             return $cached;
         }
@@ -101,12 +115,9 @@ class TokenManager
         return $this->fetchAndCacheToken($flow, $scope);
     }
 
-    /**
-     * ดึง Refresh Token จากช่องทางการจัดเก็บปัจจุบัน (ถ้ามี)
-     */
     public function getRefreshToken(TokenFlow $flow, string $scope): ?string
     {
-        $cached = $this->getFromStorage($this->cacheKey($flow->cachePrefix(), $scope));
+        $cached = $this->getFromStorage($this->cacheKey($flow, $scope));
 
         if (\is_array($cached) && isset($cached['refresh_token'])) {
             return (string) $cached['refresh_token'];
@@ -115,155 +126,171 @@ class TokenManager
         return null;
     }
 
-    /**
-     * ตรวจสอบสถานะการหมดอายุของ Token ด้วย Logic การ Double Verify
-     */
+    public function getTokenFromTokensStore(TokenFlow $flow, string $scope): mixed
+    {
+        return $this->storage()->get($this->cacheKey($flow, $scope));
+    }
+
     public function isExpired(TokenFlow $flow, string $scope): bool
     {
-        $key = $this->cacheKey($flow->cachePrefix(), $scope);
-        $cached = $this->tokenStoreName === 'session' 
-            ? session($key) 
-            : $this->cache()->get($key);
+        $cached = $this->storage()->get($this->cacheKey($flow, $scope));
 
-        return $this->isExpiredData($cached);
+        return $this->isExpiredData($cached, self::CACHE_TTL_BUFFER);
     }
 
-    /**
-     * 🕵️‍♂️ ดึงรายชื่อ Cache Keys ทั้งหมดใน Manifest ออกมาดู
-     * @return array<int, string>
-     */
-    public function getManifestKeys(): array
-    {
-        $manifestKey = "master_manifest:{$this->clientId}";
-        
-        $keys = $this->tokenStoreName === 'session'
-            ? session($manifestKey, [])
-            : $this->cache()->get($manifestKey, []);
+    // ─── Token Persistence ────────────────────────────────────────────────────
 
-        return \is_array($keys) ? $keys : [];
-    }
-
-    /**
-     * 🧪 ดึงข้อมูลเชิงลึกของ Token ทุกตัวที่มีอยู่ ณ ปัจจุบันมาแสดงผล (สำหรับ Debug)
-     * @return array<string, mixed>
-     */
-    public function debugAllTokens(): array
-    {
-        $keys = $this->getManifestKeys();
-        $dump = [];
-
-        foreach ($keys as $key) {
-            if (\is_string($key) && $key !== '') {
-                $dump[$key] = $this->getFromStorage($key);
-            }
-        }
-
-        return $dump;
-    }
-
-    /**
-     * 💥 คำสั่งล้างบาง: ลบ Token ทั้งหมดของ Client นี้ (ทุก Flow และทุก Scope) ให้หมดจด
-     */
-    public function clearAll(): void
-    {
-        $manifestKey = "master_manifest:{$this->clientId}";
-        
-        // ดึงรายชื่อกุญแจ (Manifest) ทั้งหมดที่ระบบเคยแอบจดบันทึกไว้
-        $keys = $this->tokenStoreName === 'session'
-            ? session($manifestKey, [])
-            : $this->cache()->get($manifestKey, []);
-
-        if (! \is_array($keys)) {
-            return; // ไม่เคยมีบันทึก = สะอาดอยู่แล้ว
-        }
-
-        // 🚀 กวาดล้างทุก Token ในรายชื่ออย่างเป็นระบบและปลอดภัย 100%
-        foreach ($keys as $targetKey) {
-            if (\is_string($targetKey) && $targetKey !== '') {
-                $this->forgetFromStorage($targetKey);
-            }
-        }
-
-        // ลบตัวสารบัญ Manifest เองออกเป็นลำดับสุดท้าย
-        $this->forgetFromStorage($manifestKey);
-    }
-
-    /**
-     * ลบ token data ทิ้งสิ้นซาก (รองรับทั้ง Session wrapper และ Cache engine)
-     */
-    public function clear(TokenFlow $flow, string $scope): void
-    {
-        $this->forgetFromStorage($this->cacheKey($flow->cachePrefix(), $scope));
-    }
-
-    /**
-     * บันทึกชุดข้อมูลลงระบบจัดเก็บที่เลือกไว้อย่างสมบูรณ์ (เลียนแบบ BackendApi Pattern)
-     */
     public function store(array $data, TokenFlow $flow, string $scope = ''): string
     {
         $accessToken = $data['access_token'] ?? null;
-        $tokenType   = $data['token_type'] ?? 'Bearer';
-        $rawExpires  = $data['expires_in'] ?? self::DEFAULT_EXPIRES_IN;
 
         if (! \is_string($accessToken) || $accessToken === '') {
             throw new RuntimeException("Token storage security violation: missing 'access_token'.");
         }
 
-        $expiresIn = \is_int($rawExpires) ? $rawExpires : self::DEFAULT_EXPIRES_IN;
-        $cacheTtl  = max(self::MIN_CACHE_TTL, $expiresIn - self::CACHE_TTL_BUFFER);
-
-        $fullPayload = [
-            'access_token'  => $accessToken,
-            'token_type'    => $tokenType,
-            'refresh_token' => $data['refresh_token'] ?? null,
-            'expires_in'    => $expiresIn,
-            'expires_at'    => now()->addSeconds($expiresIn)->toIso8601String(),
-        ];
+        $rawExpires = $data['expires_in'] ?? self::DEFAULT_EXPIRES;
+        $expiresIn = \is_int($rawExpires) ? $rawExpires : self::DEFAULT_EXPIRES;
+        $cacheTtl = max(self::MIN_CACHE_TTL, $expiresIn - self::CACHE_TTL_BUFFER);
 
         $this->storeToStorage(
-            $this->cacheKey($flow->cachePrefix(), $scope),
-            $fullPayload,
-            $cacheTtl
+            $this->cacheKey($flow, $scope),
+            [
+                'access_token' => $accessToken,
+                'token_type' => $data['token_type'] ?? 'Bearer',
+                'refresh_token' => $data['refresh_token'] ?? null,
+                'expires_in' => $expiresIn,
+                'expires_at' => now()->addSeconds($expiresIn)->toIso8601String(),
+            ],
+            $cacheTtl,
         );
 
         return $accessToken;
     }
 
+    // ─── Token Invalidation ───────────────────────────────────────────────────
+
+    public function clear(TokenFlow $flow, string $scope): void
+    {
+        $this->forgetFromStorage($this->cacheKey($flow, $scope));
+    }
+
+    public function clearByKey(string $key): void
+    {
+        if (\is_string($key) && $key !== '') {
+            $this->forgetFromStorage($key);
+        }
+    }
+
+    public function clearAll(): void
+    {
+        $manifestKey = $this->manifestKey();
+        $keys = $this->storage()->get($manifestKey, []);
+
+        if (! \is_array($keys)) {
+            return;
+        }
+
+        foreach ($keys as $key) {
+            if (\is_string($key) && $key !== '') {
+                $this->storage()->forget($key);
+            }
+        }
+
+        $this->storage()->forget($manifestKey);
+    }
+
+    // ─── Debug & Introspection ────────────────────────────────────────────────
+
     /**
-     * ขอ access token ใหม่จาก Master ตาม flow ที่ระบุ พร้อม cache ผลลัพธ์
+     * @return array<int, string>
      */
+    public function getManifestKeys(): array
+    {
+        $keys = $this->storage()->get($this->manifestKey(), []);
+
+        return \is_array($keys) ? $keys : [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function debugAllTokens(): array
+    {
+        return collect($this->getManifestKeys())
+            ->filter(fn($key) => \is_string($key) && $key !== '')
+            ->mapWithKeys(fn($key) => [$key => $this->getFromStorage($key)])
+            ->all();
+    }
+
+    // ─── Private: Token Fetching ──────────────────────────────────────────────
+
     private function fetchAndCacheToken(TokenFlow $flow, string $scope): string
     {
+        // บังคับ การเก็บข้อมูล หากต้องการ เก็บแบบ Session
+        $isSessionToken = $flow->isSessionToken();
+        if ($isSessionToken) {
+            //  $this->withTokenStore('session');
+            $this->tokenStoreName = 'session';
+            //   dd('dfsd');
+        }
+        $payload = $this->buildGrantPayload($flow, $scope);
+        $headers = $this->buildSignedHeaders($payload);
+        $body = $this->requestTokenFromMaster($flow, $payload, $headers);
+
+        return $this->store($flow->unwrapBody($body), $flow, $scope);
+    }
+
+    private function buildGrantPayload(TokenFlow $flow, string $scope): array
+    {
         $payload = [
-            'grant_type'    => $flow->grantType(),
-            'client_id'     => $this->clientId,
+            'grant_type' => $flow->grantType(),
+            'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
-            'scope'         => $scope,
+            'scope' => $scope,
         ];
 
+        if (! empty($this->username) && ! empty($this->password)) {
+            $payload['grant_type'] = 'password';
+            $payload['username'] = $this->username;
+            $payload['password'] = $this->password;
+        }
+
+        if ($flow->isNeedBodyToken() && ! empty($this->bodytoken)) {
+            $payload = [...$payload, ...$this->bodytoken];
+        }
+
+        return $payload;
+    }
+
+    private function buildSignedHeaders(array $payload): array
+    {
         $headers = [
             'X-Timestamp' => now()->toIso8601String(),
             'X-Client-ID' => $this->clientId,
         ];
 
-        $signatureKeyPair = $this->sodium->generateSignatureKeyPair($this->signatureSeed);
-        $privateSignKey = $signatureKeyPair['secret'] ?? '';
+        $keyPair = $this->sodium->generateSignatureKeyPair($this->signatureSeed);
+        $privateKey = $keyPair['secret'] ?? '';
 
-        if ($privateSignKey === '') {
+        if ($privateKey === '') {
             throw new RuntimeException('Invalid signature keypair: missing secret.');
         }
 
-        // ทำการเข้ารหัสและ Sign Payload ตาม Protocol ความปลอดภัยระดับสูง
-        $encryptedPayload = $this->sodium->hybridEncrypt($payload, $this->publicBox);
-        $headers['X-Signature'] = $this->sodium->sign([...$payload, ...$headers], $privateSignKey);
+        $headers['X-Signature'] = $this->sodium->sign([...$payload, ...$headers], $privateKey);
 
-        // เคลียร์ Memory ทันทีเพื่อความปลอดภัยสูงสุด
-        \sodium_memzero($privateSignKey);
-        if (\is_string($signatureKeyPair['secret'] ?? null)) {
-            \sodium_memzero($signatureKeyPair['secret']);
+        \sodium_memzero($privateKey);
+        if (\is_string($keyPair['secret'] ?? null)) {
+            \sodium_memzero($keyPair['secret']);
         }
 
+        return $headers;
+    }
+
+    private function requestTokenFromMaster(TokenFlow $flow, array $payload, array $headers): array
+    {
         try {
+            $encryptedPayload = $this->sodium->hybridEncrypt($payload, $this->publicBox);
+
             $response = Http::asForm()
                 ->withHeaders($headers)
                 ->post(
@@ -273,7 +300,7 @@ class TokenManager
         } catch (Throwable $e) {
             Log::critical('Master Token Fetch Error: Connection Failed', [
                 'client_id' => $this->clientId,
-                'error'     => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
             throw $e;
         }
@@ -281,136 +308,108 @@ class TokenManager
         if ($response->failed()) {
             Log::error('Master Auth Failed', [
                 'client_id' => $this->clientId,
-                'flow'      => $flow->value,
-                'status'    => $response->status(),
-                'body'      => $response->body(),
+                'flow' => $flow->value,
+                'status' => $response->status(),
             ]);
-            throw new RuntimeException('Could not authenticate with Master Server.');
+
+            throw new RuntimeException('ไม่สามารถยืนยันตัวตนกับ Master Server ได้');
         }
 
         $body = $response->json();
+
         if (! \is_array($body)) {
             throw new RuntimeException('Master Server returned invalid JSON response.');
         }
 
-        $data = $flow->unwrapBody($body);
-
-        return $this->store($data, $flow, $scope);
+        return $body;
     }
 
-    /**
-     * สร้าง Key สำหรับ Cache
-     */
-    private function cacheKey(string $prefix, string $scope): string
+    // ─── Private: Storage Abstraction ────────────────────────────────────────
+
+    private function storage(): TokenStorageInterface
     {
-        $base = "{$prefix}:{$this->clientId}:" . md5($scope);
-
-        return $this->cacheSuffix === ''
-            ? $base
-            : "{$base}:{$this->cacheSuffix}";
+        return match ($this->tokenStoreName) {
+            'session' => new SessionTokenStorage,
+            default => new CacheTokenStorage($this->tokenStoreName),
+        };
     }
 
-    /**
-     * Helper สำหรับการเรียกใช้งาน Cache Store
-     */
-    private function cache(): CacheRepository
-    {
-        return $this->tokenStoreName !== null
-            ? Cache::store($this->tokenStoreName)
-            : Cache::store();
-    }
-
-    /**
-     * 🔥 Helper พิเศษ: บันทึกข้อมูลลง Storage
-     * (สลับระหว่าง Native Session แบบ BackendApi กับ Laravel Cache อัตโนมัติ)
-     */
-    private function storeToStorage(string $key, array $payload, int $ttl): void
-    {
-        if ($this->tokenStoreName === 'session') {
-            session([$key => $payload]); // 🚀 Direct Native Session Store (Flexible & Literal)
-        } else {
-            $this->cache()->put($key, $payload, $ttl);
-        }
-
-        // 🔥 บันทึกกุญแจลงสารบัญอัตโนมัติ เพื่อให้ระบบรู้ว่าจะตามไปลบทั้งหมดได้ที่ไหน!
-        $this->recordToManifest($key);
-    }
-
-    /**
-     * 🔥 Helper ลงทะเบียนประวัติการสร้าง Cache Keys
-     */
-    private function recordToManifest(string $key): void
-    {
-        $manifestKey = "master_manifest:{$this->clientId}";
-        
-        $keys = $this->tokenStoreName === 'session'
-            ? session($manifestKey, [])
-            : $this->cache()->get($manifestKey, []);
-
-        $keys = \is_array($keys) ? $keys : [];
-        
-        if (! \in_array($key, $keys, true)) {
-            $keys[] = $key;
-            
-            if ($this->tokenStoreName === 'session') {
-                session([$manifestKey => $keys]);
-            } else {
-                // บันทึกสารบัญไว้เป็นระยะยาว (เช่น 30 วัน) เพื่อเป็นฐานข้อมูลอ้างอิง
-                $this->cache()->put($manifestKey, $keys, 2592000); 
-            }
-        }
-    }
-
-    /**
-     * 🔥 Helper พิเศษ: ดึงข้อมูล พร้อมระบบ Smart Auto-Pruning
-     */
     private function getFromStorage(string $key): mixed
     {
-        $cached = $this->tokenStoreName === 'session'
-            ? session($key) // 🚀 Direct Native Session Retrieve
-            : $this->cache()->get($key);
+        $cached = $this->storage()->get($key);
 
-        // 💡 พลังขับเคลื่อนอัจฉริยะ: ป้องกัน Session ค้างเติ่งตลอดกาล (เพราะ Session ไม่มี Auto TTL แบบ Cache)
-        // หากตรวจพบว่าหมดอายุตาม Double Check Algorithm จะสั่งทำลายและคืน Null เพื่อกระตุ้น Auto-Refresh ทันที!
-        if ($cached !== null && $this->isExpiredData($cached)) {
-            $this->forgetFromStorage($key);
-            return null; 
+        if ($cached !== null && $this->isExpiredData($cached, self::CACHE_TTL_BUFFER)) {
+            $this->storage()->forget($key);
+
+            return null;
         }
 
         return $cached;
     }
 
-    /**
-     * 🔥 Helper พิเศษ: ล้างข้อมูลทิ้งถาวร
-     */
-    private function forgetFromStorage(string $key): void
+    private function storeToStorage(string $key, array $payload, int $ttl): void
     {
-        if ($this->tokenStoreName === 'session') {
-            session()->forget($key); // 🚀 Native Session Destruction
-            return;
-        }
-
-        $this->cache()->forget($key);
+        $this->storage()->put($key, $payload, $ttl);
+        $this->recordToManifest($key);
     }
 
-    /**
-     * 🔥 Core Expired Validator (Double Check Security Layer)
-     */
-    private function isExpiredData(mixed $cached): bool
+    private function forgetFromStorage(string $key, bool $updateManifest = true): void
     {
-        if ($cached === null) {
-            return true;
+        $this->storage()->forget($key);
+
+        if ($updateManifest && $key !== $this->manifestKey()) {
+            $this->removeFromManifest($key);
+        }
+    }
+
+    // ─── Private: Manifest Tracking ──────────────────────────────────────────
+
+    private function manifestKey(): string
+    {
+        return "master_manifest:{$this->clientId}";
+    }
+
+    private function recordToManifest(string $key): void
+    {
+        $manifestKey = $this->manifestKey();
+        $keys = $this->storage()->get($manifestKey, []);
+        $keys = \is_array($keys) ? $keys : [];
+
+        if (! \in_array($key, $keys, true)) {
+            $keys[] = $key;
+            $this->storage()->put($manifestKey, $keys, self::MANIFEST_TTL);
+        }
+    }
+
+    private function removeFromManifest(string $key): void
+    {
+        $manifestKey = $this->manifestKey();
+        $keys = $this->storage()->get($manifestKey, []);
+        $keys = \is_array($keys) ? $keys : [];
+
+        $filtered = array_values(array_filter($keys, fn($k) => $k !== $key));
+        $this->storage()->put($manifestKey, $filtered, self::MANIFEST_TTL);
+    }
+
+    // ─── Private: Cache Key ───────────────────────────────────────────────────
+
+    private function cacheKey(TokenFlow $flow, string $scope): string
+    {
+        $prefix = $flow->cachePrefix();
+        $isSessionToken = $flow->isSessionToken();
+        $fingerprint = '';
+
+        if ($isSessionToken && ! app()->runningInConsole() && request()->userAgent() !== null) {
+            $sessionDevice = app('core.session.device_fingerprint');
+            // $fingerprint = ':' . $sessionDevice->fingerprint();
+            $fingerprint = ':' . $sessionDevice->fingerprintWithAgent(session()->getId());
         }
 
-        if (\is_string($cached)) {
-            return false; // Legacy valid context
-        }
+        $base = "{$prefix}:{$this->clientId}{$fingerprint}:" . md5($scope);
+        $base = hash('sha384', $base);
 
-        if (\is_array($cached) && isset($cached['expires_at'])) {
-            // คำนวณความปลอดภัย: เวลาตอนนี้ + Buffer (5 นาที) ทะลุจุดหมดอายุหรือยัง?
-            return now()->addSeconds(self::CACHE_TTL_BUFFER)->gte(Carbon::parse($cached['expires_at']));
-        }
-
-        return true; // ปลอดภัยไว้ก่อน ถ้าผิดพลาดให้ถือว่าตาย
+        return $this->cacheSuffix === ''
+            ? $base
+            : "{$base}:{$this->cacheSuffix}";
     }
 }

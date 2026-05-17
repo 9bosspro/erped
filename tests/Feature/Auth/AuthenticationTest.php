@@ -1,8 +1,30 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Fortify\Features;
+
+beforeEach(function () {
+    Http::fake([
+        '*/oauth/token' => Http::response([
+            'data' => [
+                'token_type' => 'Bearer',
+                'expires_in' => 3600,
+                'access_token' => 'mocked-access-token',
+                'refresh_token' => 'mocked-refresh-token',
+            ],
+        ], 200),
+        '*/api/v1/auth/user/me' => Http::response([
+            'data' => [
+                'user' => [
+                    'id' => 1,
+                    'email' => 'mocked@example.com',
+                ],
+            ],
+        ], 200),
+    ]);
+});
 
 test('login screen can be rendered', function () {
     $response = $this->get(route('login'));

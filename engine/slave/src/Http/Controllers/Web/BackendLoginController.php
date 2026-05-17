@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Slave\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use Slave\Services\BackendApi\BackendAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Slave\Contracts\Master\BackendAuthServiceInterface;
 
 /**
  * BackendLoginController — จัดการ Login/Logout ผ่าน Backend API (pppportal)
@@ -20,7 +21,7 @@ use Inertia\Response;
 class BackendLoginController extends Controller
 {
     public function __construct(
-        private readonly BackendAuthService $authService,
+        private readonly BackendAuthServiceInterface $authService,
     ) {}
 
     /**
@@ -30,7 +31,7 @@ class BackendLoginController extends Controller
     {
         return Inertia::render('auth/login', [
             'canResetPassword' => true,
-            'status'           => session('status'),
+            'status' => session('status'),
         ]);
     }
 
@@ -40,7 +41,7 @@ class BackendLoginController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'email'    => 'required|string|email',
+            'email' => 'required|string|email',
             'password' => 'required|string',
         ]);
 
@@ -49,9 +50,9 @@ class BackendLoginController extends Controller
             $request->string('password')->value(),
         );
 
-        if (! $result['success']) {
+        if (! (bool) ($result['success'] ?? false)) {
             return back()->withErrors([
-                'email' => $result['message'],
+                'email' => (string) ($result['message'] ?? 'เกิดข้อผิดพลาด กรุณาลองใหม่'),
             ])->onlyInput('email');
         }
 
@@ -65,8 +66,10 @@ class BackendLoginController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
-        // dd('dsfsd');
-        $this->authService->logout();
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return redirect('/');
     }

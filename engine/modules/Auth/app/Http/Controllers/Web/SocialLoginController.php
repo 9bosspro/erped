@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Engine\Modules\Auth\Http\Controllers\Web;
 
-//use App\Http\Controllers\Api\BaseApiController;
+// use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Exception;
@@ -19,7 +19,8 @@ use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirect;
 class SocialLoginController extends Controller
 {
     private const array SUPPORTED_PROVIDERS = ['google'];
-    private const SESSION_ACCESS_TOKEN_JWT  = 'backend_access_token_jwt';
+
+    private const SESSION_ACCESS_TOKEN_JWT = 'backend_access_token_jwt';
 
     /**
      * ส่งผู้ใช้ไปยังหน้า Login ของ Provider (เช่น Google)
@@ -37,17 +38,17 @@ class SocialLoginController extends Controller
 
         $payload = [
             'redirect_to' => $redirectTo,
-            'origin'      => $request->headers->get('origin'),
-            'nonce'       => Str::random(16),
-            'expires_at'  => now()->addMinutes(3)->timestamp,
+            'origin' => $request->headers->get('origin'),
+            'nonce' => Str::random(16),
+            'expires_at' => now()->addMinutes(3)->timestamp,
         ];
 
         $payloadJson = canonicalize($payload);
-        $signature   = hash_hmac('sha256', (string) $payloadJson, (string) get_app_key());
+        $signature = hash_hmac('sha256', (string) $payloadJson, (string) get_app_key());
 
         $state = encodeb64UrlSafe((string) json_encode([
             'data' => $payload,
-            'sig'  => $signature,
+            'sig' => $signature,
         ]));
 
         return Socialite::driver($provider)->stateless()
@@ -76,7 +77,7 @@ class SocialLoginController extends Controller
             abort(400, 'Invalid state data');
         }
 
-        $payload     = $stateData['data'];
+        $payload = $stateData['data'];
         $receivedSig = (string) ($stateData['sig'] ?? '');
         $payloadJson = canonicalize($payload);
         $expectedSig = hash_hmac('sha256', (string) $payloadJson, (string) get_app_key());
@@ -93,72 +94,77 @@ class SocialLoginController extends Controller
         if (now()->timestamp > $expiresAt) {
             abort(403, 'State expired');
         }
+        //
+        $client = app('slave.master');
+        //
+        $client->clearAllWithSessionAndRedis();
 
         try {
             $socialUser = Socialite::driver($provider)->stateless()->user();
-            $email      = $socialUser->getEmail();
+            $email = $socialUser->getEmail();
 
             if (empty($email)) {
                 abort(403, 'Email is required');
             }
             //  dd($socialUser);
-            $client = app('slave.master');
 
+            // TokenFlow::Personal   //TokenFlow::Jwt
+            //     $clients = $client->withFlow(TokenFlow::Personal)->withScope('social_login:all');
 
-            $clients = $client->withFlow(TokenFlow::Jwt)->withScope('social_login:all');
-
+            //     $clients = $client->withFlow(TokenFlow::Jwt)->withScope('social_login:all');
+            /*   $clients = $client->withFlow(TokenFlow::Personal)->withTokenStore('session');
+            dd($client); */
             $metadata = [
                 'social_users' => [
                     $provider => [
-                        'id'     => $socialUser->getId(),
-                        'email'  => $socialUser->getEmail(),
-                        'name'   => $socialUser->getName(),
+                        'id' => $socialUser->getId(),
+                        'email' => $socialUser->getEmail(),
+                        'name' => $socialUser->getName(),
                         'avatar' => $socialUser->getAvatar(),
                     ],
                 ],
             ];
 
             $payloadLogin = [
-                'email'    => $socialUser->getEmail(),
-                'nonce'    => Str::random(16),
-                'name_th'  => $socialUser->getName(),
-                'name_en'  => $socialUser->getName(),
-                'password' => Str::random(64),
+                'email' => $socialUser->getEmail(),
+                'nonce' => Str::random(16),
+                'name_th' => $socialUser->getName(),
+                'name_en' => $socialUser->getName(),
+                'password' => $email,
                 'metadata' => $metadata,
             ];
+            //    dd($payloadLogin);
 
-            $response = $clients->post('/api/v1/auth/login-social', $payloadLogin);
-            //sendRequest
+            // ใช้ sendRequest() เพื่อรับ Response object (มี ->failed(), ->json())
+            // post() คืน array ตรงๆ — ไม่สามารถเรียก ->failed() ได้  ->withCacheSuffix(session()->getId()) ->withTokenStore('session')
+            $Personal = $client->withFlow(TokenFlow::Personal)->withBody($payloadLogin);
+            $response = $Personal->sendRequest('POST', '/api/v1/auth/user/me');
 
-            if ($response['success'] === false) {
-                return redirect()->route('login')
-                    ->withErrors(['email' => $response['message']]);
+            if ($response->failed()) {
+                $message = $response->json('message') ?? 'Authentication failed';
+
+                return redirect()->route('login')->withErrors(['email' => $message]);
             }
-            //
-            $data = $response['data'];
-            //  dd($data);
-            //ลบ token jwt social_login:all ที่ใช้ไปแล้ว
-            $client->clearToken(TokenFlow::Jwt, 'social_login:all');
-            //
-            //  ใช้  $data['token'] เรียก api  /me   มาดึงข้อมูลส่วนตัวของ user เพื่อเทราบรายละเอียด  user
-            //
 
+            $data = $response->json('data');
+            // dd($data);
+            // 4. สั่ง Sync โปรไฟล์และดำเนินการเข้าสู่ระบบ (Login)
             $user = User::firstOrCreate(
                 ['email' => $socialUser->getEmail()],
                 [
                     'username' => $data['user']['username'] ?? $socialUser->getEmail(),
-                    'name'     => $socialUser->getName(),
-                    'name_th'  => $socialUser->getName(),
-                    'name_en'  => $socialUser->getName(),
-                    'password' => Str::random(64),
+                    'name' => $socialUser->getName(),
+                    'name_th' => $socialUser->getName(),
+                    'name_en' => $socialUser->getName(),
+                    'password' => $email,
                     'metadata' => $metadata,
                     'backend_user_id' => $data['user']['id'],
-                ]
+                ],
             );
 
             if (! $user->wasRecentlyCreated) {
                 $user->update([
-                    'name'    => $socialUser->getName(),
+                    'name' => $socialUser->getName(),
                     'name_th' => $socialUser->getName(),
                     'name_en' => $socialUser->getName(),
                     'metadata' => $metadata,
@@ -166,42 +172,32 @@ class SocialLoginController extends Controller
                 ]);
             }
 
-            //
-            $personalClient = $client->withFlow(TokenFlow::Personal)->withTokenStore('session')->withToken($data['token']);
-            //storeToken
-            // นำ token ยิง  useribfo  หรือ  me
-            $userResp = $personalClient->post('/api/v1/auth/user/me');
-            if ($userResp['success'] == false) {
-                return redirect()->route('login')->withErrors(['email' => $userResp['message']]);
-            }
-
-            //   $userRespData = $userResp['data'];
-            //  dd($userRespData);
-
             Auth::login($user);
             //
-            $personalClient->storeToken([
-                'access_token' => $data['token'],
-                'token_type'   => $data['token_type'] ?? 'Bearer',
-                'expires_in'   => (int) ($data['expires_in'] ?? 86400),
-                // 'refresh_token' => $data['refresh_token'] ?? null,
-            ]);
+            session()->regenerate();
+            // เก็บค่า  srsssion  ของ สถานะ การล้อกอินประเภท  personal
+            session(['type_login' => 'personal']);
+            $fingerprint = app('core.session.device_fingerprint')->fingerprint();
+            session(['_device_fingerprint' => $fingerprint]);
+            //   session(['type_login' => 'personal']);
+            session()->save();
 
-
-
-
-            // session([self::SESSION_ACCESS_TOKEN_JWT => $data['token']]);
-
+            // 5. ดึงค่าปลายทาง Redirect
             $redirectTo = (string) ($payload['redirect_to'] ?? '/');
 
-            if (! str_starts_with($redirectTo, '/')) {
+            if (! str_starts_with($redirectTo, '//')) {
                 $redirectTo = '/';
             }
 
             return redirect($redirectTo);
         } catch (Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Social login callback failed: ' . $e->getMessage(), [
+                'provider' => $provider,
+                'exception' => $e,
+            ]);
+
             return redirect()->route('login')
-                ->withErrors(['email' => $e->getMessage()]);
+                ->withErrors(['email' => 'เกิดข้อผิดพลาดในการเชื่อมต่อโซเชียล: ' . $e->getMessage()]);
         }
     }
 }

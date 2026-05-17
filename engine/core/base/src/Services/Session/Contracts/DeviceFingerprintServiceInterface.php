@@ -128,4 +128,33 @@ interface DeviceFingerprintServiceInterface
      * @return array<string, mixed>
      */
     public function identity(): array;
+
+    // ─── Enhanced Fingerprint ────────────────────────────────────
+
+    /**
+     * สร้าง fingerprint ที่ combine device fingerprint + agent string เพิ่มเติม
+     * ใช้เพื่อลดโอกาส signal collision ระหว่างผู้ใช้ที่มี device profile เหมือนกัน
+     *
+     * ตัวอย่าง:
+     *   $fp->fingerprintWithAgent(session()->getId())      // แยกต่อ session
+     *   $fp->fingerprintWithAgent((string) auth()->id())   // แยกต่อ user
+     *
+     * @param  string|null   $agent    ค่าเพิ่มเติม เช่น session ID หรือ user ID
+     * @param  Request|null  $request  HTTP request (null = ใช้ current request)
+     * @return string HMAC-SHA256 hex string (64 chars)
+     *
+     * @throws RuntimeException ถ้า app.key ว่าง
+     */
+    public function fingerprintWithAgent(?string $agent = null, ?Request $request = null): string;
+
+    /**
+     * สร้าง unique Request ID ที่ผูกกับ fingerprint + IP + timestamp + UUID
+     * เหมาะสำหรับใช้เป็น Idempotency Key หรือ Request Tracing
+     *
+     * @param  Request|null  $request  HTTP request (null = ใช้ current request)
+     * @return string HMAC-SHA256 hex string (64 chars)
+     *
+     * @throws RuntimeException ถ้า app.key ว่าง
+     */
+    public function getRequestId(?Request $request = null): string;
 }

@@ -40,6 +40,20 @@ interface MasterClientInterface
     public function withCredentials(string $clientId, string $clientSecret): static;
 
     /**
+     * คืน instance ใหม่ที่ใช้ User Password สำหรับ Password Grant Flow
+     *
+     * ใช้งาน: $client->withFlow(TokenFlow::Password)->withUserPassword($email, $password)->sendRequest(...)
+     */
+    public function withUserPassword(string $username, string $password): static;
+
+    /**
+     * คืน instance ใหม่ที่แนบ body เพิ่มเติมเข้าไปใน token request
+     *
+     * @param  array<string, mixed>|null  $bodytoken
+     */
+    public function withBody(?array $bodytoken = null): static;
+
+    /**
      * คืน instance ใหม่ที่บังคับใช้ Bearer token ตามที่ระบุโดยตรง (ข้ามการขอ Auto-Token)
      *
      * ใช้งาน: $client->withToken('eyJ...')->get('/endpoint')
@@ -71,17 +85,17 @@ interface MasterClientInterface
     /**
      * คืน instance ใหม่ที่เปิดใช้งานการแคชผลลัพธ์ (มีผลเฉพาะ HTTP GET เท่านั้น)
      *
-     * @param int $seconds ระยะเวลาในการแคช (วินาที)
-     * @param string|null $store ชื่อ Cache Store ที่ต้องการใช้ (เช่น 'redis', 'session') null เพื่อใช้ default
-     * ใช้งาน: $client->cache(600, 'session')->get('/endpoint')
+     * @param  int  $seconds  ระยะเวลาในการแคช (วินาที)
+     * @param  string|null  $store  ชื่อ Cache Store ที่ต้องการใช้ (เช่น 'redis', 'session') null เพื่อใช้ default
+     *                              ใช้งาน: $client->cache(600, 'session')->get('/endpoint')
      */
     public function cache(int $seconds, ?string $store = null): static;
 
     /**
      * คืน instance ใหม่ที่สั่งให้ TokenManager ใช้ Cache Store ที่ระบุในการเก็บ Token
      *
-     * @param string|null $store ชื่อช่องทางการเก็บข้อมูล token (เช่น 'redis', 'session')
-     * ใช้งาน: $client->withTokenStore('redis')->get('/endpoint')
+     * @param  string|null  $store  ชื่อช่องทางการเก็บข้อมูล token (เช่น 'redis', 'session')
+     *                              ใช้งาน: $client->withTokenStore('redis')->get('/endpoint')
      */
     public function withTokenStore(?string $store): static;
 
@@ -89,8 +103,8 @@ interface MasterClientInterface
      * คืน instance ใหม่ที่ต่อท้ายกุญแจแคช (Cache Key) เพื่อแบ่ง Context ป้องกันข้อมูลชนกัน
      * เหมาะสำหรับระบบ Multi-User หรือต้องการแยกความแตกต่างเฉพาะ
      *
-     * @param string $suffix ข้อความที่ต้องการนำมาต่อท้าย (เช่น User ID หรือ Session ID)
-     * ใช้งาน: $client->withCacheSuffix(auth()->id())->get('/profile')
+     * @param  string  $suffix  ข้อความที่ต้องการนำมาต่อท้าย (เช่น User ID หรือ Session ID)
+     *                          ใช้งาน: $client->withCacheSuffix(auth()->id())->get('/profile')
      */
     public function withCacheSuffix(string $suffix): static;
 
@@ -101,7 +115,7 @@ interface MasterClientInterface
      *
      * เหมาะกับกรณีที่ต้องการดึงไฟล์ดิบ (Download), ตรวจสอบ header หรือ custom status code
      *
-     * @param  'GET'|'POST'|'PUT'|'PATCH'|'DELETE'  $method
+     * @param  'DELETE'|'GET'|'PATCH'|'POST'|'PUT'  $method
      * @param  array<string, mixed>  $options  query strings หรือ request data
      */
     public function sendRequest(string $method, string $endpoint, array $options = []): Response;
@@ -229,10 +243,25 @@ interface MasterClientInterface
     public function clearAllTokens(): void;
 
     /**
+     * 💥 ลบ Token ทั้งหมดที่จัดเก็บอยู่ในช่องทาง Session ทันที
+     */
+    public function clearAllWithSession(): void;
+
+    /**
+     * 💥💥 สั่งลบ Token ทั้งหมดแบบสะงาดหมดจด ทั้งใน Cache (Default), Session และ Redis
+     */
+    public function clearAllWithSessionAndRedis(): void;
+
+    /**
+     * 🎯 ลบเฉพาะ Token ด้วย Cache Key ตรงๆ ที่ระบุ
+     */
+    public function clearTokenByKey(string $key): void;
+
+    /**
      * บันทึก Token Data ดิบลง Cache ด้วยตนเอง
      * หากไม่ระบุ Flow/Scope จะใช้ค่าเริ่มต้นจาก Config ปัจจุบัน
      *
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function storeToken(array $data, ?TokenFlow $flow = null, ?string $scope = null): void;
 
@@ -248,12 +277,14 @@ interface MasterClientInterface
 
     /**
      * 🧪 [Debug] ดึงข้อมูลเชิงลึกของ Token ทั้งหมดที่แคชไว้ขณะนี้ออกมาดู (สำหรับตรวจสอบค่าดิบ)
+     *
      * @return array<string, mixed>
      */
     public function debugCachedTokens(): array;
 
     /**
      * 🕵️‍♂️ [Debug] ดึงเฉพาะรายชื่อ Cache Keys ทั้งหมดที่ระบบกำลังติดตามอยู่ (จาก Manifest)
+     *
      * @return array<int, string>
      */
     public function getCachedManifest(): array;

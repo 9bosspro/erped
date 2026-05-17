@@ -5,40 +5,58 @@ declare(strict_types=1);
 namespace Slave\Services\Master;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use App\Repositories\Contracts\UserRepositoryInterface;
+use RuntimeException;
 
 /**
- * UserSyncService — sync ข้อมูล user จาก Backend (pppportal) ลง local database
+ * UserSyncService — ประสานข้อมูลผู้ใช้งานระหว่าง Master Server กับ Local Database
  *
- * ทำไมต้อง sync?
- *  - Fortify ต้องการ User model ใน local database สำหรับ session auth
- *  - Inertia ต้องการ auth.user ใน shared props
- *  - Backend (pppportal) คือ single source of truth ของ user data
- *
- * password ใน local database เป็น random hash (ไม่ใช้จริง — auth ผ่าน Backend เท่านั้น)
+ * หน้าที่:
+ *  - ดึงข้อมูลผู้ใช้จาก Master Server response
+ *  - สร้างหรืออัพเดท user ในฐานข้อมูลท้องถิ่น
+ *  - คืนค่า User object สำหรับ Local auth
  */
 class UserSyncService
 {
+    public function __construct(
+        private readonly UserRepositoryInterface $userRepository,
+    ) {}
+
     /**
-     * Upsert user จาก Backend data ลง local database
-     * ใช้ backend_user_id เป็น key สำหรับ upsert
+     * ประสานข้อมูลผู้ใช้จาก Master Server ลง Local DB
      *
-     * @param array<string, mixed> $backendUser
+     * @param  array<string, mixed>  $backendData  ข้อมูลผู้ใช้จาก Master Server
+     * @return User Local user instance
      */
-    public function sync(array $backendUser): User
+    public function sync(array $backendData): User
     {
-        return User::updateOrCreate(
-            ['backend_user_id' => $backendUser['id']],
-            [
-                'name'              => $backendUser['name_th']
-                    ?? $backendUser['name_en']
-                    ?? $backendUser['nickname_th']
-                    ?? $backendUser['email'],
-                'email'             => $backendUser['email'],
-                'password'          => Hash::make(Str::random(32)),
-                'email_verified_at' => now(),
-            ],
-        );
+        $backendUserId = $backendData['id'] ?? null;
+        $email = $backendData['email'] ?? null;
+
+        if (! \is_scalar($backendUserId) || ! \is_scalar($email)) {
+            throw new RuntimeException('Invalid backend user data: missing id or email');
+        }
+
+        $backendUserId = (string) $backendUserId;
+        $email = (string) $email;
+
+        $user = User::firstOrNew(['backend_user_id' => $backendUserId]);
+
+        $user->fill([
+            'backend_user_id' => $backendUserId,
+            'email' => $email,
+            'name' => $backendData['name'] ?? $backendData['name_th'] ?? '',
+            'username' => $backendData['username'] ?? '',
+            'name_th' => $backendData['name_th'] ?? '',
+            'name_en' => $backendData['name_en'] ?? '',
+            'nickname_th' => $backendData['nickname_th'] ?? '',
+            'nickname_en' => $backendData['nickname_en'] ?? '',
+            'is_active' => (bool) ($backendData['is_active'] ?? true),
+            'metadata' => $backendData['metadata'] ?? [],
+        ]);
+
+        $user->save();
+
+        return $user;
     }
 }

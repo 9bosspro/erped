@@ -1,8 +1,26 @@
 <?php
 
 use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
+use App\Notifications\ResetPasswordNotification;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+
+beforeEach(function () {
+    Http::fake([
+        '*/oauth/token' => Http::response([
+            'data' => [
+                'token_type' => 'Bearer',
+                'expires_in' => 3600,
+                'access_token' => 'mocked-access-token',
+                'refresh_token' => 'mocked-refresh-token',
+            ],
+        ], 200),
+        '*/api/v1/clients/reset-password-forget' => Http::response([
+            'success' => true,
+            'message' => 'Password sync successful',
+        ], 200),
+    ]);
+});
 
 test('reset password link screen can be rendered', function () {
     $response = $this->get(route('password.request'));
@@ -17,7 +35,7 @@ test('reset password link can be requested', function () {
 
     $this->post(route('password.email'), ['email' => $user->email]);
 
-    Notification::assertSentTo($user, ResetPassword::class);
+    Notification::assertSentTo($user, ResetPasswordNotification::class);
 });
 
 test('reset password screen can be rendered', function () {
@@ -27,7 +45,7 @@ test('reset password screen can be rendered', function () {
 
     $this->post(route('password.email'), ['email' => $user->email]);
 
-    Notification::assertSentTo($user, ResetPassword::class, function ($notification) {
+    Notification::assertSentTo($user, ResetPasswordNotification::class, function ($notification) {
         $response = $this->get(route('password.reset', $notification->token));
 
         $response->assertStatus(200);
@@ -43,7 +61,7 @@ test('password can be reset with valid token', function () {
 
     $this->post(route('password.email'), ['email' => $user->email]);
 
-    Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+    Notification::assertSentTo($user, ResetPasswordNotification::class, function ($notification) use ($user) {
         $response = $this->post(route('password.update'), [
             'token' => $notification->token,
             'email' => $user->email,

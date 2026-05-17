@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Engine\Modules\Auth\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use Slave\Services\BackendApi\BackendAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Slave\Services\Master\BackendAuthService;
 
 /**
  * BackendLoginController — จัดการ Login/Logout ผ่าน Backend API (pppportal)
@@ -30,7 +30,7 @@ class BackendLoginController extends Controller
     {
         return Inertia::render('auth/login', [
             'canResetPassword' => true,
-            'status'           => session('status'),
+            'status' => session('status'),
         ]);
     }
 
@@ -40,7 +40,7 @@ class BackendLoginController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'email'    => 'required|string|email',
+            'email' => 'required|string|email',
             'password' => 'required|string',
         ]);
 

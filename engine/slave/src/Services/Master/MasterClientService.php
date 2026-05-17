@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Slave\Services\Master;
 
-use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -13,6 +12,7 @@ use Illuminate\Support\Str;
 use RuntimeException;
 use Slave\Contracts\Master\MasterClientInterface;
 use Slave\Contracts\Master\TokenFlow;
+use Throwable;
 
 /**
  * MasterClientService — HTTP client หลักสำหรับติดต่อ Master Server
@@ -68,13 +68,13 @@ final class MasterClientService implements MasterClientInterface
         private TokenManager $tokenManager,
         string $defaultScope = '',
     ) {
-        $this->masterUrl    = rtrim($masterUrl, '/');
-        $this->clientId     = $clientId;
+        $this->masterUrl = rtrim($masterUrl, '/');
+        $this->clientId = $clientId;
         $this->clientSecret = $clientSecret;
-        $this->activeScope  = self::normalizeScope($defaultScope);
+        $this->activeScope = self::normalizeScope($defaultScope);
 
         // Load configurations from config like BackendApiClient pattern
-        $this->timeout    = (int) config('slave::client.timeout', 15);
+        $this->timeout = (int) config('slave::client.timeout', 15);
         $this->retryTimes = (int) config('slave::client.retry_times', 2);
         $this->retryDelay = (int) config('slave::client.retry_delay', 100);
     }
@@ -120,16 +120,38 @@ final class MasterClientService implements MasterClientInterface
     }
 
     /**
+     * คืน instance ใหม่ที่ตั้งค่า body สำหรับ token request
+     */
+    public function withBody(?array $bodytoken = null): static
+    {
+        $clone = clone $this;
+        $clone->tokenManager = $this->tokenManager->withBody($bodytoken);
+
+        return $clone;
+    }
+
+    /**
      * คืน instance ใหม่ที่ใช้ credentials ที่ระบุ (รวมทั้งอัปเดตไปยัง TokenManager ด้วย)
      */
     public function withCredentials(string $clientId, string $clientSecret): static
     {
         $clone = clone $this;
-        $clone->clientId     = $clientId;
+        $clone->clientId = $clientId;
         $clone->clientSecret = $clientSecret;
 
         // สำคัญ: ส่งต่อ credentials ชุดใหม่ไปยัง TokenManager cloned instance ด้วย
         $clone->tokenManager = $this->tokenManager->withCredentials($clientId, $clientSecret);
+
+        return $clone;
+    }
+
+    /**
+     * คืน instance ใหม่ที่ตั้งค่า username และ password สำหรับการขอ token
+     */
+    public function withUserPassword(string $username, string $password): static
+    {
+        $clone = clone $this;
+        $clone->tokenManager = $this->tokenManager->withUserPassword($username, $password);
 
         return $clone;
     }
@@ -141,10 +163,11 @@ final class MasterClientService implements MasterClientInterface
     {
         $clone = clone $this;
         $clone->explicitToken = $token;
-        $clone->attachToken   = true; // รับรองว่ามีการแนบแน่ๆ
+        $clone->attachToken = true; // รับรองว่ามีการแนบแน่ๆ
 
         return $clone;
     }
+
     /**
      * คืน instance ใหม่ที่ไม่แนบ access token ใดๆ (Alias of withoutToken)
      */
@@ -170,7 +193,7 @@ final class MasterClientService implements MasterClientInterface
     public function withoutToken(): static
     {
         $clone = clone $this;
-        $clone->attachToken   = false;
+        $clone->attachToken = false;
         $clone->explicitToken = null; // 🛡️ เคลียร์ manual token เผื่อทิ้งไว้ เพื่อความปลอดภัยสูงสุด
 
         return $clone;
@@ -190,6 +213,8 @@ final class MasterClientService implements MasterClientInterface
 
     /**
      * คืน instance ใหม่ที่ปรับการกำหนดค่า Token Store ใน TokenManager
+     *
+     * @param  string|null  $store  เช่น  session หรือ redis
      */
     public function withTokenStore(?string $store): static
     {
@@ -199,17 +224,56 @@ final class MasterClientService implements MasterClientInterface
         return $clone;
     }
 
+    /**
+     * คืน instance ใหม่ที่เพิ่ม suffix เพื่อแยก cache context ระหว่างสถานการณ์ต่างๆ
+     */
     public function withCacheSuffix(string $suffix): static
     {
         $clone = clone $this;
-        $clone->cacheSuffix  = trim($suffix);
-        // 🔥 ส่งต่อให้ TokenManager ด้วย เพื่อให้มันต่อท้าย Cache Key ตอนเก็บ Token ด้วยเช่นกันครับ
+        $clone->cacheSuffix = trim($suffix);
         $clone->tokenManager = $this->tokenManager->withCacheSuffix($suffix);
 
         return $clone;
     }
 
-    // ─── HTTP Methods ────────────────────────────────────────────────────────
+    /**
+     * คืน instance ใหม่ที่ใช้ Device Fingerprint เป็น cache suffix
+     * เพื่อแยก token cache ตาม device/browser โดยอัตโนมัติ
+     *
+     * Safety: ตรวจว่ามี HTTP request จริงก่อน resolve fingerprint
+     * — ป้องกันปัญหาใน CLI / Queue / Schedule ที่ไม่มี User-Agent
+     *
+     * ตัวอย่างการใช้:
+     *   $client->withFlow(TokenFlow::Personal)
+     *          ->withTokenStore('session')
+     *          ->withDeviceFingerprint()     ← แยก token ตาม device อัตโนมัติ
+     *          ->sendRequest('POST', '/api/...');
+     */
+    //  public function withDeviceFingerprint(): static
+    //   {
+    // Guard: ไม่ apply fingerprint หากไม่มี HTTP request (CLI/Queue context)
+    //   if (! app()->runningInConsole() && request()->userAgent() !== null) {
+    //       /** @var \Core\Base\Services\Session\DeviceFingerprintServiceInterface $fpService */
+    /*   $fpService = app('core.session.device_fingerprint');
+      $fingerprint = $fpService->fingerprint(request());
+
+      return $this->withCacheSuffix($fingerprint);
+        }
+
+        return $this; */
+    //   }
+
+    /**
+     * ดึงข้อมูล Token จาก Token Store โดยตรง (ไม่เพิ่มเติมหรือ refresh)
+     */
+    public function getTokenFromTokensStore(?TokenFlow $flow = null, ?string $scope = null): mixed
+    {
+        $flow ??= $this->activeFlow;
+        $scope = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+        $this->getToken($flow, $scope);
+
+        return $this->tokenManager->getTokenFromTokensStore($flow, $scope);
+    }
 
     /**
      * ส่ง HTTP request และคืนค่าดิบ Response object โดยตรง
@@ -218,17 +282,16 @@ final class MasterClientService implements MasterClientInterface
     {
         $method = strtoupper($method);
 
-        return $this->withTokenRetry(
-            fn(): Response => match ($method) {
-                'GET'    => $this->client()->get($endpoint, $options),
-                'POST'   => $this->client()->post($endpoint, $options),
-                'PUT'    => $this->client()->put($endpoint, $options),
-                'PATCH'  => $this->client()->patch($endpoint, $options),
-                'DELETE' => $this->client()->delete($endpoint, $options),
-                default  => throw new RuntimeException("Unsupported HTTP method: {$method}"),
-            }
-        );
+        return match ($method) {
+            'GET' => $this->client()->get($endpoint, $options),
+            'POST' => $this->client()->post($endpoint, $options),
+            'PUT' => $this->client()->put($endpoint, $options),
+            'PATCH' => $this->client()->patch($endpoint, $options),
+            'DELETE' => $this->client()->delete($endpoint, $options),
+            default => throw new RuntimeException("Unsupported HTTP method: {$method}"),
+        };
     }
+    //
 
     public function get(string $endpoint, array $query = []): array
     {
@@ -323,13 +386,13 @@ final class MasterClientService implements MasterClientInterface
         string $mimeType = 'application/octet-stream',
         string $method = 'PUT',
     ): array {
-        $method   = strtoupper($method);
+        $method = strtoupper($method);
         $response = $this->withTokenRetry(
             function () use ($endpoint, $stream, $mimeType, $method): Response {
                 $client = $this->client()->withBody($stream, $mimeType);
 
                 return match ($method) {
-                    'POST'  => $client->post($endpoint),
+                    'POST' => $client->post($endpoint),
                     default => $client->put($endpoint),
                 };
             },
@@ -351,6 +414,19 @@ final class MasterClientService implements MasterClientInterface
         return $this->masterUrl;
     }
 
+    /**
+     * ได้ full url ของ master server
+     * - ถ้าไม่ระบุ token flow จะใช้ token flow ปัจจุบัน
+     * - ถ้าไม่ระบุ endpoint จะใช้ endpoint ของ token flow
+     */
+    public function fullUrl(?TokenFlow $flow = null, ?string $endpoint = null): string
+    {
+        $flow ??= $this->activeFlow;
+        $endpoint ??= $flow->endpoint();
+
+        return "{$this->masterUrl}/" . ltrim($endpoint, '/');
+    }
+
     public function ping(): bool
     {
         try {
@@ -359,7 +435,7 @@ final class MasterClientService implements MasterClientInterface
             );
 
             return $response->successful();
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return false;
         }
     }
@@ -369,7 +445,7 @@ final class MasterClientService implements MasterClientInterface
         try {
             // 🚀 REFACTOR DRY: นำระบบ Unified Cache ที่สร้างไว้มาประยุกต์ใช้ซ้ำ ลดความซับซ้อนและเพิ่มความปลอดภัย
             return $this->cache(3600)->get('/api/v1/licence/check');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null; // รักษาสัญญา Contract เดิม คืน null เมื่อล้มเหลว
         }
     }
@@ -385,18 +461,59 @@ final class MasterClientService implements MasterClientInterface
 
     public function getToken(?TokenFlow $flow = null, ?string $scope = null): string
     {
-        $flow  ??= $this->activeFlow;
-        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+        $flow ??= $this->activeFlow;
+        $scope = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
 
         return $this->tokenManager->getToken($flow, $scope);
     }
 
+    public function generateSignedHeaders(array $payload): array
+    {
+        //
+        $sodium = app('core.crypto.sodium');
+        $headers = [
+            'X-Timestamp' => now()->toIso8601String(),
+            'X-Client-ID' => $this->clientId,
+        ];
+        $signatureSeed = config('slave::client.signature_seed', '');
+        $signatureKeyPair = $sodium->generateSignatureKeyPair($signatureSeed);
+        $privateSignKey = $signatureKeyPair['secret'] ?? '';
+
+        if ($privateSignKey === '') {
+            throw new RuntimeException('Invalid signature keypair: missing secret.');
+        }
+
+        $headers['X-Signature'] = $sodium->sign([...$payload, ...$headers], $privateSignKey);
+
+        \sodium_memzero($privateSignKey);
+        if (\is_string($signatureKeyPair['secret'] ?? null)) {
+            \sodium_memzero($signatureKeyPair['secret']);
+        }
+
+        return $headers;
+        // return $this->tokenManager->buildSignedHeaders($payload);
+    }
+
+    public function encryptedpayload(array $payload): string
+    {
+        $sodium = app('core.crypto.sodium');
+        $publicBox = config('slave::client.public_box');
+
+        return $sodium->hybridEncrypt($payload, $publicBox);
+    }
+
     public function clearToken(?TokenFlow $flow = null, ?string $scope = null): void
     {
-        $flow  ??= $this->activeFlow;
-        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+        $flow ??= $this->activeFlow;
+        $scope = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
 
         $this->tokenManager->clear($flow, $scope);
+    }
+
+    public function clearAllWithSession(): void
+    {
+        // 🚀 ต้องเรียก withTokenStore เพื่อสลับเป็น clone session ก่อน แล้วค่อยสั่ง clear
+        $this->withTokenStore('session')->clearAllTokens();
     }
 
     public function clearAllTokens(): void
@@ -404,26 +521,43 @@ final class MasterClientService implements MasterClientInterface
         $this->tokenManager->clearAll();
     }
 
+    public function clearAllWithSessionAndRedis(): void
+    {
+        // 1. ลบโทเคนใน Default Cache Store ปัจจุบัน
+        $this->clearAllTokens();
+
+        // 2. สลับช่องทางไปลบใน Session โดยตรง
+        $this->withTokenStore('session')->clearAllTokens();
+
+        // 3. สลับช่องทางไปลบใน Redis โดยตรง (เผื่อกรณีที่ Default ไม่ใช่ Redis)
+        $this->withTokenStore('redis')->clearAllTokens();
+    }
+
+    public function clearTokenByKey(string $key): void
+    {
+        $this->tokenManager->clearByKey($key);
+    }
+
     public function storeToken(array $data, ?TokenFlow $flow = null, ?string $scope = null): void
     {
-        $flow  ??= $this->activeFlow;
-        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+        $flow ??= $this->activeFlow;
+        $scope = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
 
         $this->tokenManager->store($data, $flow, $scope);
     }
 
     public function getRefreshToken(?TokenFlow $flow = null, ?string $scope = null): ?string
     {
-        $flow  ??= $this->activeFlow;
-        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+        $flow ??= $this->activeFlow;
+        $scope = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
 
         return $this->tokenManager->getRefreshToken($flow, $scope);
     }
 
     public function isExpired(?TokenFlow $flow = null, ?string $scope = null): bool
     {
-        $flow  ??= $this->activeFlow;
-        $scope   = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
+        $flow ??= $this->activeFlow;
+        $scope = $scope !== null ? self::normalizeScope($scope) : $this->activeScope;
 
         return $this->tokenManager->isExpired($flow, $scope);
     }
@@ -436,6 +570,37 @@ final class MasterClientService implements MasterClientInterface
     public function getCachedManifest(): array
     {
         return $this->tokenManager->getManifestKeys();
+    }
+
+    // ─── HTTP Methods ────────────────────────────────────────────────────────
+    private function client(): PendingRequest
+    {
+        $sessionDevice = app('core.session.device_fingerprint');
+
+        $client = Http::baseUrl($this->masterUrl)
+            ->timeout($this->timeout)
+            ->retry($this->retryTimes, $this->retryDelay, function (Throwable $e): bool {
+                return $e instanceof \Illuminate\Http\Client\RequestException
+                    && $e->response->serverError();
+            })
+            ->acceptJson()
+            ->withHeaders([
+                //  'X-App-id' => config('services.sso.client_id'),
+                'X-Session-Fingerprint' => $sessionDevice->getRequestId(),
+                'X-Platform' => 'erped-frontend',
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+            ]);
+
+        if ($this->attachToken) {
+            // ลำดับความสำคัญ: 1. Token ที่ป้อนมาตรงๆ (Explicit) 2. Token ที่ดึงจาก TokenManager
+            $token = $this->explicitToken ?? $this->tokenManager->getToken($this->activeFlow, $this->activeScope);
+            $client->withToken($token);
+        }
+
+        return $this->extraHeaders !== []
+            ? $client->withHeaders($this->extraHeaders)
+            : $client;
     }
 
     // ─── Private: Core Infrastructure ────────────────────────────────────────
@@ -488,12 +653,12 @@ final class MasterClientService implements MasterClientInterface
 
         // สร้าง State signature เพื่อแยกความแตกต่างของ Context, Flow, Params และ Auth state อย่างละเอียดอ่อน
         $stateSignature = md5(json_encode([
-            'flow'    => $this->activeFlow->value,
-            'scope'   => $this->activeScope,
+            'flow' => $this->activeFlow->value,
+            'scope' => $this->activeScope,
             'headers' => $this->extraHeaders,
-            'auth'    => $this->attachToken,
-            'suffix'  => $this->cacheSuffix,
-            'params'  => $safeParams,
+            'auth' => $this->attachToken,
+            'suffix' => $this->cacheSuffix,
+            'params' => $safeParams,
         ]));
 
         return "{$baseIdentifier}:{$stateSignature}";
@@ -521,30 +686,6 @@ final class MasterClientService implements MasterClientInterface
 
         return $response;
     }
+    //
 
-    private function client(): PendingRequest
-    {
-        $client = Http::baseUrl($this->masterUrl)
-            ->timeout($this->timeout)
-            ->retry($this->retryTimes, $this->retryDelay, function (\Throwable $e): bool {
-                return $e instanceof \Illuminate\Http\Client\RequestException
-                    && $e->response->serverError();
-            })
-            ->acceptJson()
-            ->withHeaders([
-                'X-Platform'   => 'erped-frontend',
-                'Accept'       => 'application/json',
-                'Content-Type' => 'application/json',
-            ]);
-
-        if ($this->attachToken) {
-            // ลำดับความสำคัญ: 1. Token ที่ป้อนมาตรงๆ (Explicit) 2. Token ที่ดึงจาก TokenManager
-            $token = $this->explicitToken ?? $this->tokenManager->getToken($this->activeFlow, $this->activeScope);
-            $client->withToken($token);
-        }
-
-        return $this->extraHeaders !== []
-            ? $client->withHeaders($this->extraHeaders)
-            : $client;
-    }
 }

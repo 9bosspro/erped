@@ -110,7 +110,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
             'model' => $this->model() ?? '',
             // ── Language / Encoding (normalized) ─────────────────────────
             'lang' => $this->normalizeLang((string) $request->header('Accept-Language', '')),
-            'accept_enc' => (string) $request->header('Accept-Encoding', ''),
+            'accept_enc' => $this->normalizeEncoding((string) $request->header('Accept-Encoding', '')),
             // ── Client Hints — stable signals ────────────────────────────
             'ch_brands' => implode(',', $brandNames),
             'ch_platform' => (static function (mixed $v): string {
@@ -127,7 +127,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
                 return is_scalar($v) ? (string) $v : '';
             })($id['ch_model'] ?? ''),
             'ch_wow64' => ($id['ch_wow64'] ?? false) ? '1' : '0',
-            'ch_form' => implode(',', array_map(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '', (array) ($id['ch_form_factors'] ?? []))),
+            'ch_form' => implode(',', array_map(static fn(mixed $v): string => is_scalar($v) ? (string) $v : '', (array) ($id['ch_form_factors'] ?? []))),
             // ── Native App identity ───────────────────────────────────────
             'app_id' => (static function (mixed $v): string {
                 return is_scalar($v) ? (string) $v : '';
@@ -139,6 +139,34 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         // HMAC-SHA256 ป้องกัน offline rainbow table / preimage attack
         return hash_hmac('sha256', $payload, $appKey);
     }
+    /**
+     * สร้าง fingerprint เสริม โดย combine device fingerprint + agent string เพิ่มเติม
+     * ใช้เพื่อลดโอกาส signal collision ระหว่างผู้ใช้ที่มี device profile เหมือนกัน
+     *
+     * ตัวอย่าง: fingerprintWithAgent(session()->getId())
+     *           fingerprintWithAgent((string) auth()->id())
+     *
+     * @param  string|null  $agent    ค่าเพิ่มเติม เช่น session ID หรือ user ID
+     * @param  Request|null  $request HTTP request (null = ใช้ current request)
+     * @return string HMAC-SHA256 hex string (64 chars)
+     */
+    public function fingerprintWithAgent(?string $agent = null, ?Request $request = null): string
+    {
+        $agent = $agent ?? '';
+
+        $appKeyRaw = config('app.key', '');
+        $appKey = \is_string($appKeyRaw) ? $appKeyRaw : '';
+        if ($appKey === '') {
+            throw new RuntimeException(
+                'APP_KEY is not set. Cannot generate a secure fingerprint without an HMAC key.',
+            );
+        }
+
+        $fp = $this->fingerprint($request);
+
+        return hash_hmac('sha256', $fp . ':' . $agent, $appKey);
+    }
+
 
     /**
      * สร้าง instance จาก Request — parse ครั้งเดียวต่อ request
@@ -164,7 +192,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
         $chBrands = $request->header('Sec-CH-UA', '');
 
         // Cache key ครอบคลุม UA + Client Hints ป้องกัน false cache hit
-        $cacheKey = $ua.'|'.$chPlatform.'|'.$chBrands;
+        $cacheKey = $ua . '|' . $chPlatform . '|' . $chBrands;
 
         if ($this->parsed && isset($this->detector) && $this->buildCacheKey() === $cacheKey) {
             return $this;
@@ -225,7 +253,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
             $random = Uuid::uuid7()->getHex()->toString();
             $ip = $request->ip() ?? '';
             $appKey = \is_string(config('app.key')) ? (string) config('app.key') : '';
-            $sessionid = hash_hmac('sha256', $fingerprint.$ip.microtime(true).$random, $appKey);
+            $sessionid = hash_hmac('sha256', $fingerprint . $ip . microtime(true) . $random, $appKey);
             $this->currentRequestId = $sessionid;
         }
 
@@ -464,7 +492,7 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
 
         return array_filter(
             $this->parsedIdentity,
-            fn (string $key) => ! str_starts_with($key, '_'),
+            fn(string $key) => ! str_starts_with($key, '_'),
             ARRAY_FILTER_USE_KEY,
         );
     }
@@ -581,8 +609,8 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
             $signals[] = [
                 'type' => 'outdated_browser',
                 'level' => 'medium',
-                'detail' => (static fn (mixed $v): string => is_scalar($v) ? (string) $v : '')($this->parsedClient['name'] ?? '')
-                    .' '.(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '')($this->parsedClient['version'] ?? ''),
+                'detail' => (static fn(mixed $v): string => is_scalar($v) ? (string) $v : '')($this->parsedClient['name'] ?? '')
+                    . ' ' . (static fn(mixed $v): string => is_scalar($v) ? (string) $v : '')($this->parsedClient['version'] ?? ''),
             ];
         }
 
@@ -669,7 +697,9 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
 
         $score = 0;
         foreach ($signals as $signal) {
-            $weightValue = $weights[$signal['level']] ?? 0;
+            // ป้องกัน PHP Notice กรณี $signal ไม่มี key 'level' — fallback เป็น 'low'
+            $level = is_string($signal['level'] ?? null) ? $signal['level'] : 'low';
+            $weightValue = $weights[$level] ?? 0;
             $score += is_int($weightValue) ? $weightValue : (is_numeric($weightValue) ? (int) $weightValue : 0);
         }
 
@@ -691,6 +721,20 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
     }
 
     /**
+     * Normalize Accept-Encoding header เป็น canonical representation
+     *
+     * ตัวอย่าง: "gzip, deflate, br;q=1.0, zstd" → "br,deflate,gzip,zstd" (เรียงลำดับตามตัวอักษร)
+     */
+    private function normalizeEncoding(string $raw): string
+    {
+        preg_match_all('/([a-zA-Z0-9\-]+)(?:;q=[\d.]+)?/', $raw, $matches);
+        $encodings = array_unique(array_map('strtolower', $matches[1]));
+        sort($encodings);
+
+        return implode(',', $encodings);
+    }
+
+    /**
      * คืน cache key ที่ใช้ตอน fromRequest() สำหรับตรวจ invalidation
      */
     private function buildCacheKey(): string
@@ -699,16 +743,16 @@ final class DeviceFingerprintService implements DeviceFingerprintServiceInterfac
     }
 
     /**
-     * ตรวจว่า parse แล้วหรือยัง — throw ถ้ายังไม่ได้เรียก fromRequest()
+     * ตรวจว่า parse แล้วหรือยัง — auto-parse ด้วย current request ถ้ายังไม่ได้ parse
      *
-     * @throws RuntimeException ถ้ายังไม่ได้ parse
+     * เปลี่ยนจาก throw RuntimeException เป็น auto-parse เพื่อให้เรียก accessor ได้โดยตรง
+     * โดยไม่ต้องเรียก fromRequest() ก่อนเสมอ
+     * หมายเหตุ: fingerprint() ยังคง override fromRequest() อยู่ — เหตุผลเดียวกัน
      */
     private function ensureParsed(): void
     {
         if (! $this->parsed) {
-            throw new RuntimeException(
-                'DeviceDetector not initialized. Call fromRequest($request) before using accessors.',
-            );
+            $this->fromRequest();
         }
     }
 }

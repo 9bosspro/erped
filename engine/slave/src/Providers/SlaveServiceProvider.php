@@ -4,22 +4,21 @@ declare(strict_types=1);
 
 namespace Slave\Providers;
 
-use Core\Base\Support\Helpers\Crypto\SodiumHelper;
-use Core\Base\Traits\LoadAndPublishDataTrait;
-use Illuminate\Routing\Router;
-use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\ServiceProvider;
-use Slave\Contracts\Master\MasterClientInterface;
-use Slave\Http\Middleware\ForceTheme;
-// use Slave\Http\Middleware\SecurityHeaders;
-use Slave\Services\BackendApi\BackendApiClient;
-use Slave\Services\Master\MasterClientService;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Repositories\Eloquent\UserRepository;
+use Core\Base\Support\Helpers\Crypto\SodiumHelper;
+use Core\Base\Traits\LoadAndPublishDataTrait;
 use Illuminate\Auth\Events\Logout;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Event;
-use Slave\Listeners\ClearMasterTokensOnLogout;
-
+use Illuminate\Support\ServiceProvider;
+use Slave\Contracts\Master\BackendAuthServiceInterface;
+use Slave\Contracts\Master\MasterClientInterface;
+use Slave\Listeners\SyncLogoutToMaster;
+use Slave\Services\BackendApi\BackendApiClient;
+use Slave\Services\Master\BackendAuthService;
+use Slave\Services\Master\MasterClientService;
+use Slave\Services\Master\UserSyncService;
 
 /**
  * SlaveServiceProvider — bootstrap สำหรับ EvoEngine Slave Client
@@ -40,6 +39,9 @@ class SlaveServiceProvider extends ServiceProvider
         $this->setNamespace('Slave');
         $this->app->bind(UserRepositoryInterface::class, UserRepository::class);
         $this->app->singleton(BackendApiClient::class);
+        $this->app->singleton(UserSyncService::class);
+        $this->app->singleton(BackendAuthService::class);
+        $this->app->singleton(BackendAuthServiceInterface::class, BackendAuthService::class);
         $this->registerMasterClient();
     }
 
@@ -52,7 +54,6 @@ class SlaveServiceProvider extends ServiceProvider
         $this->loadAndPublishConfigurations(['client', 'security']);
         $this->loadHelpers(['Slave']);
         $this->loadRoutes(['api']);
-        //  $this->registerMiddlewareAliases();
         $this->registerBladeDirectives();
         $this->registerEventListeners();
     }
@@ -84,6 +85,34 @@ class SlaveServiceProvider extends ServiceProvider
      */
     private function registerMasterClient(): void
     {
+        // 1. ลงทะเบียน TokenManager ก่อน เพื่อให้ container สามารถ resolve ได้
+        $this->app->singleton(\Slave\Services\Master\TokenManager::class, static function ($app): \Slave\Services\Master\TokenManager {
+            /** @var \Illuminate\Contracts\Config\Repository $config */
+            $config = $app['config'];
+
+            $masterUrl = $config->get('slave::client.master_url', '');
+            $clientId = $config->get('slave::client.client_id', '');
+            $clientSecret = $config->get('slave::client.client_secret', '');
+
+            $masterUrl = \is_string($masterUrl) ? $masterUrl : '';
+            $clientId = \is_string($clientId) ? $clientId : '';
+            $clientSecret = \is_string($clientSecret) ? $clientSecret : '';
+
+            /** @var SodiumHelper $sodium */
+            $sodium = $app->make('core.crypto.sodium');
+
+            return new \Slave\Services\Master\TokenManager(
+                masterUrl: $masterUrl,
+                clientId: $clientId,
+                clientSecret: $clientSecret,
+                sodium: $sodium,
+                signatureSeed: (string) $config->get('slave::client.signature_seed', ''),
+                publicBox: (string) $config->get('slave::client.public_box', ''),
+                tokenStoreName: $config->get('slave::client.token_store'),
+            );
+        });
+
+        // 2. ลงทะเบียน MasterClientService ผ่าน interface
         $this->app->singleton(MasterClientInterface::class, static function ($app): MasterClientService {
             /** @var \Illuminate\Contracts\Config\Repository $config */
             $config = $app['config'];
@@ -97,21 +126,9 @@ class SlaveServiceProvider extends ServiceProvider
             $clientId = \is_string($clientId) ? $clientId : '';
             $clientSecret = \is_string($clientSecret) ? $clientSecret : '';
 
-            /** @var SodiumHelper $sodium */
-            $sodium = $app->make('core.crypto.sodium');
+            /** @var \Slave\Services\Master\TokenManager $tokenManager */
+            $tokenManager = $app->make(\Slave\Services\Master\TokenManager::class);
 
-            // 1. สร้าง TokenManager เพื่อจัดการเรื่องความปลอดภัยและ Token Lifecycle
-            $tokenManager = new \Slave\Services\Master\TokenManager(
-                masterUrl: $masterUrl,
-                clientId: $clientId,
-                clientSecret: $clientSecret,
-                sodium: $sodium,
-                signatureSeed: (string) $config->get('slave::client.signature_seed', ''),
-                publicBox: (string) $config->get('slave::client.public_box', ''),
-                tokenStoreName: $config->get('slave::client.token_store'), // 💡 ดึงค่าเริ่มต้นจาก config อัตโนมัติ
-            );
-
-            // 2. ส่งเข้า MasterClientService (Dependency Injection)
             return new MasterClientService(
                 masterUrl: $masterUrl,
                 clientId: $clientId,
@@ -125,17 +142,6 @@ class SlaveServiceProvider extends ServiceProvider
     }
 
     /**
-     * ลงทะเบียน middleware aliases
-     */
-    private function registerMiddlewareAliases(): void
-    {
-        /** @var Router $router */
-        //  $router = $this->app->make(Router::class);
-        //   $router->aliasMiddleware('slave.security', SecurityHeaders::class);
-        //  $router->aliasMiddleware('slave.theme', ForceTheme::class);
-    }
-
-    /**
      * ลงทะเบียน Event Listeners ของ Slave Package
      */
     private function registerEventListeners(): void
@@ -143,7 +149,7 @@ class SlaveServiceProvider extends ServiceProvider
         // 🚨 ดักจับเหตุการณ์ Logout และสั่งล้าง Master Tokens ทันที
         Event::listen(
             Logout::class,
-            ClearMasterTokensOnLogout::class
+            SyncLogoutToMaster::class,
         );
     }
 }

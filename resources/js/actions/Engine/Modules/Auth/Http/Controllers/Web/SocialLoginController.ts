@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../../../../../../wayfinder'
 /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::redirect
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:27
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:28
  * @route '/auth/{provider}/redirect'
  */
 export const redirect = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -16,7 +16,7 @@ redirect.definition = {
 
 /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::redirect
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:27
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:28
  * @route '/auth/{provider}/redirect'
  */
 redirect.url = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions) => {
@@ -44,7 +44,7 @@ redirect.url = (args: { provider: string | number } | [provider: string | number
 
 /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::redirect
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:27
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:28
  * @route '/auth/{provider}/redirect'
  */
 redirect.get = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -53,7 +53,7 @@ redirect.get = (args: { provider: string | number } | [provider: string | number
 })
 /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::redirect
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:27
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:28
  * @route '/auth/{provider}/redirect'
  */
 redirect.head = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -63,7 +63,7 @@ redirect.head = (args: { provider: string | number } | [provider: string | numbe
 
     /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::redirect
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:27
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:28
  * @route '/auth/{provider}/redirect'
  */
     const redirectForm = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -73,7 +73,7 @@ redirect.head = (args: { provider: string | number } | [provider: string | numbe
 
             /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::redirect
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:27
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:28
  * @route '/auth/{provider}/redirect'
  */
         redirectForm.get = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -82,7 +82,7 @@ redirect.head = (args: { provider: string | number } | [provider: string | numbe
         })
             /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::redirect
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:27
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:28
  * @route '/auth/{provider}/redirect'
  */
         redirectForm.head = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -98,7 +98,7 @@ redirect.head = (args: { provider: string | number } | [provider: string | numbe
     redirect.form = redirectForm
 /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::callback
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:61
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:62
  * @route '/auth/{provider}/callback'
  */
 export const callback = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -113,7 +113,7 @@ callback.definition = {
 
 /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::callback
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:61
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:62
  * @route '/auth/{provider}/callback'
  */
 callback.url = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions) => {
@@ -141,7 +141,7 @@ callback.url = (args: { provider: string | number } | [provider: string | number
 
 /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::callback
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:61
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:62
  * @route '/auth/{provider}/callback'
  */
 callback.get = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -150,7 +150,7 @@ callback.get = (args: { provider: string | number } | [provider: string | number
 })
 /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::callback
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:61
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:62
  * @route '/auth/{provider}/callback'
  */
 callback.head = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -160,7 +160,7 @@ callback.head = (args: { provider: string | number } | [provider: string | numbe
 
     /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::callback
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:61
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:62
  * @route '/auth/{provider}/callback'
  */
     const callbackForm = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -170,7 +170,7 @@ callback.head = (args: { provider: string | number } | [provider: string | numbe
 
             /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::callback
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:61
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:62
  * @route '/auth/{provider}/callback'
  */
         callbackForm.get = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -179,7 +179,7 @@ callback.head = (args: { provider: string | number } | [provider: string | numbe
         })
             /**
 * @see \Engine\Modules\Auth\Http\Controllers\Web\SocialLoginController::callback
- * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:61
+ * @see engine/modules/Auth/app/Http/Controllers/Web/SocialLoginController.php:62
  * @route '/auth/{provider}/callback'
  */
         callbackForm.head = (args: { provider: string | number } | [provider: string | number ] | string | number, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
